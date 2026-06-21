@@ -165,19 +165,19 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
       <div className="flex min-h-screen">
-        <aside className="hidden w-72 shrink-0 border-r border-slate-200 bg-white/80 px-6 py-7 backdrop-blur lg:flex lg:flex-col">
+        <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white/80 px-5 py-6 backdrop-blur lg:flex lg:flex-col">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-[#0066cc] text-sm font-semibold text-white">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-[#0066cc] text-sm font-semibold text-white">
               R
             </div>
             <div>
-              <p className="text-xl font-semibold leading-6 text-[#0066cc]">RAG Engine</p>
-              <p className="text-sm text-slate-500">Personal AI</p>
+              <p className="text-lg font-semibold leading-5 text-[#0066cc]">RAG Engine</p>
+              <p className="text-xs text-slate-500">Personal AI</p>
             </div>
           </div>
 
           <button
-            className="mt-8 flex h-12 items-center justify-center gap-2 rounded-lg bg-[#0066cc] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005bb8]"
+            className="mt-7 flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0066cc] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005bb8]"
             type="button"
             onClick={() => fileInputRef.current?.click()}
           >
@@ -185,11 +185,11 @@ export default function Home() {
             Upload TXT
           </button>
 
-          <nav className="mt-7 space-y-1">
+          <nav className="mt-6 space-y-1">
             {navigationItems.map((item) => (
               <button
                 key={item.label}
-                className={`flex h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition ${
+                className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition ${
                   item.active
                     ? "bg-[#f5f5f7] font-medium text-[#0066cc] shadow-[inset_3px_0_0_#0066cc]"
                     : "text-slate-600 hover:bg-[#f5f5f7]"
@@ -202,16 +202,16 @@ export default function Home() {
             ))}
           </nav>
 
-          <div className="mt-auto border-t border-slate-200 pt-5">
+          <div className="mt-auto border-t border-slate-200 pt-4">
             <button
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-slate-600 transition hover:bg-[#f5f5f7]"
+              className="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-sm text-slate-600 transition hover:bg-[#f5f5f7]"
               type="button"
             >
               <Settings className="size-4" />
               Settings
             </button>
             <button
-              className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-slate-600 transition hover:bg-[#f5f5f7]"
+              className="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-sm text-slate-600 transition hover:bg-[#f5f5f7]"
               type="button"
             >
               <CircleHelp className="size-4" />
@@ -221,15 +221,15 @@ export default function Home() {
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-10 flex h-18 items-center justify-between border-b border-slate-200 bg-white/90 px-5 backdrop-blur md:px-8">
-            <div className="flex min-w-0 items-center gap-6">
+          <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-slate-200 bg-white/90 px-5 backdrop-blur md:px-7">
+            <div className="flex min-w-0 items-center gap-5">
               <div className="lg:hidden">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-[#0066cc] text-sm font-semibold text-white">
+                <div className="flex size-9 items-center justify-center rounded-lg bg-[#0066cc] text-sm font-semibold text-white">
                   R
                 </div>
               </div>
               <div>
-                <h1 className="truncate text-xl font-semibold text-[#0066cc] md:text-2xl">
+                <h1 className="truncate text-xl font-semibold text-[#0066cc]">
                   Knowledge Platform
                 </h1>
               </div>
@@ -237,7 +237,7 @@ export default function Home() {
                 {topNavItems.map((item) => (
                   <button
                     key={item}
-                    className={`relative h-18 px-4 text-sm font-medium ${
+                    className={`relative h-14 px-4 text-sm font-medium ${
                       item === "Ingestion" ? "text-[#0066cc]" : "text-slate-600"
                     }`}
                     type="button"
@@ -253,56 +253,56 @@ export default function Home() {
 
             <div className="flex items-center gap-2">
               <button
-                className="hidden size-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-[#f5f5f7] sm:flex"
+                className="hidden size-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-[#f5f5f7] sm:flex"
                 type="button"
                 aria-label="Search"
               >
-                <Search className="size-5" />
+                <Search className="size-[18px]" />
               </button>
               <button
-                className="hidden size-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-[#f5f5f7] sm:flex"
+                className="hidden size-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-[#f5f5f7] sm:flex"
                 type="button"
                 aria-label="Notifications"
               >
-                <Bell className="size-5" />
+                <Bell className="size-[18px]" />
               </button>
               <button
-                className="hidden size-10 items-center justify-center rounded-lg text-slate-600 transition hover:bg-[#f5f5f7] sm:flex"
+                className="hidden size-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-[#f5f5f7] sm:flex"
                 type="button"
                 aria-label="Cloud sync"
               >
-                <Cloud className="size-5" />
+                <Cloud className="size-[18px]" />
               </button>
               <button
-                className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-[#1d1d1f] shadow-sm transition hover:border-slate-300"
+                className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-[#1d1d1f] shadow-sm transition hover:border-slate-300"
                 type="button"
               >
                 <Plus className="size-4" />
                 New Chat
               </button>
-              <div className="flex size-10 items-center justify-center rounded-full bg-[#f5f5f7] text-sm font-semibold text-[#0066cc] ring-1 ring-slate-200">
+              <div className="flex size-9 items-center justify-center rounded-full bg-[#f5f5f7] text-sm font-semibold text-[#0066cc] ring-1 ring-slate-200">
                 F
               </div>
             </div>
           </header>
 
-          <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-7 px-5 py-8 md:px-8 lg:py-10">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-5 py-6 md:px-7 lg:py-7">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#0066cc] ring-1 ring-blue-100">
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#0066cc] ring-1 ring-blue-100">
                   <Zap className="size-3.5" />
                   Ingestion
                 </div>
-                <h2 className="text-3xl font-semibold tracking-tight text-[#1d1d1f] md:text-4xl">
+                <h2 className="text-2xl font-semibold tracking-tight text-[#1d1d1f] md:text-[28px]">
                   Document Ingestion
                 </h2>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
+                <p className="mt-2 max-w-2xl text-sm leading-5 text-slate-600">
                   Upload text files to prepare a knowledge base that an agent can crawl later.
                   Supported format for this first pass: TXT.
                 </p>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+              <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
                 <Metric label="Total" value={stats.total} />
                 <Metric label="Indexed" value={stats.indexed} />
                 <Metric label="Ready" value={stats.ready + stats.ingesting} />
@@ -310,7 +310,7 @@ export default function Home() {
             </div>
 
             <label
-              className={`flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed bg-white px-6 text-center shadow-sm transition ${
+              className={`flex min-h-[220px] cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed bg-white px-5 text-center shadow-sm transition ${
                 isDragging
                   ? "border-[#0066cc] ring-4 ring-blue-100"
                   : "border-[#0066cc] hover:bg-blue-50/30"
@@ -331,23 +331,23 @@ export default function Home() {
                 multiple
                 onChange={handleInputChange}
               />
-              <span className="flex size-16 items-center justify-center rounded-full bg-blue-100 text-[#0066cc]">
-                <CloudUpload className="size-8" />
+              <span className="flex size-14 items-center justify-center rounded-full bg-blue-100 text-[#0066cc]">
+                <CloudUpload className="size-7" />
               </span>
-              <span className="mt-5 text-2xl font-semibold tracking-tight text-[#1d1d1f]">
+              <span className="mt-4 text-xl font-semibold tracking-tight text-[#1d1d1f]">
                 Drag and drop TXT files here
               </span>
               <span className="mt-2 text-sm text-slate-600">{notice}</span>
-              <span className="mt-6 inline-flex h-11 items-center gap-2 rounded-lg bg-[#0066cc] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005bb8]">
+              <span className="mt-5 inline-flex h-10 items-center gap-2 rounded-lg bg-[#0066cc] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005bb8]">
                 <Upload className="size-4" />
                 Select Files
               </span>
             </label>
 
-            <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
+            <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
               <section className="min-w-0">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-xl font-semibold tracking-tight text-[#1d1d1f]">
                     Recent Uploads
                   </h3>
                   <button
@@ -360,7 +360,7 @@ export default function Home() {
                 </div>
 
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <div className="grid grid-cols-[minmax(0,1fr)_120px_44px] border-b border-slate-200 bg-[#f5f5f7] px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 sm:grid-cols-[minmax(0,1fr)_120px_140px_44px] md:grid-cols-[minmax(0,1fr)_120px_140px_120px_44px]">
+                  <div className="grid grid-cols-[minmax(0,1fr)_120px_40px] border-b border-slate-200 bg-[#f5f5f7] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 sm:grid-cols-[minmax(0,1fr)_110px_130px_40px] md:grid-cols-[minmax(0,1fr)_110px_130px_110px_40px]">
                     <span>File Name</span>
                     <span className="hidden sm:block">Size</span>
                     <span>Status</span>
@@ -372,11 +372,11 @@ export default function Home() {
                     {uploads.map((upload) => (
                       <div
                         key={upload.id}
-                        className="grid grid-cols-[minmax(0,1fr)_120px_44px] items-center px-4 py-4 text-sm sm:grid-cols-[minmax(0,1fr)_120px_140px_44px] md:grid-cols-[minmax(0,1fr)_120px_140px_120px_44px]"
+                        className="grid grid-cols-[minmax(0,1fr)_120px_40px] items-center px-4 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_110px_130px_40px] md:grid-cols-[minmax(0,1fr)_110px_130px_110px_40px]"
                       >
                         <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                            <FileText className="size-5" />
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                            <FileText className="size-4" />
                           </span>
                           <div className="min-w-0">
                             <p className="truncate font-medium text-[#1d1d1f]">{upload.name}</p>
@@ -400,7 +400,7 @@ export default function Home() {
                         </span>
                         <span className="hidden text-slate-600 md:block">{upload.uploadedAt}</span>
                         <button
-                          className="flex size-9 items-center justify-center rounded-lg text-slate-500 transition hover:bg-[#f5f5f7] hover:text-[#1d1d1f]"
+                          className="flex size-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-[#f5f5f7] hover:text-[#1d1d1f]"
                           type="button"
                           aria-label={`Remove ${upload.name}`}
                           onClick={() => removeUpload(upload.id)}
@@ -414,17 +414,17 @@ export default function Home() {
               </section>
 
               <aside className="space-y-4">
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-[#1d1d1f]">Agent Crawl Readiness</h3>
-                    <BookOpen className="size-5 text-[#0066cc]" />
+                    <h3 className="text-sm font-semibold text-[#1d1d1f]">Agent Crawl Readiness</h3>
+                    <BookOpen className="size-[18px] text-[#0066cc]" />
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                  <p className="mt-2 text-sm leading-5 text-slate-600">
                     TXT uploads are staged locally. Backend parsing, chunking, indexing, and agent
                     retrieval can be connected next.
                   </p>
                   <button
-                    className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#1d1d1f] px-4 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#1d1d1f] px-4 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-slate-300"
                     type="button"
                     disabled={stats.ready === 0}
                     onClick={startIngestion}
@@ -434,15 +434,15 @@ export default function Home() {
                   </button>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-base font-semibold text-[#1d1d1f]">Next Agent Query</h3>
-                    <MoreVertical className="size-5 text-slate-500" />
+                    <h3 className="text-sm font-semibold text-[#1d1d1f]">Next Agent Query</h3>
+                    <MoreVertical className="size-[18px] text-slate-500" />
                   </div>
-                  <div className="mt-5 rounded-lg bg-[#f5f5f7] p-4">
+                  <div className="mt-4 rounded-lg bg-[#f5f5f7] p-3">
                     <div className="flex items-center gap-3">
-                      <span className="flex size-9 items-center justify-center rounded-lg bg-white text-[#0066cc] ring-1 ring-slate-200">
-                        <Bot className="size-5" />
+                      <span className="flex size-8 items-center justify-center rounded-lg bg-white text-[#0066cc] ring-1 ring-slate-200">
+                        <Bot className="size-4" />
                       </span>
                       <div>
                         <p className="text-sm font-semibold text-[#1d1d1f]">Ask from knowledge</p>
@@ -462,9 +462,11 @@ export default function Home() {
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="min-w-20 rounded-lg px-3 py-2 text-center">
-      <p className="text-xl font-semibold text-[#1d1d1f]">{value}</p>
-      <p className="mt-1 text-xs font-medium uppercase tracking-[0.12em] text-slate-500">{label}</p>
+    <div className="min-w-[72px] rounded-lg px-3 py-1.5 text-center">
+      <p className="text-lg font-semibold leading-5 text-[#1d1d1f]">{value}</p>
+      <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">
+        {label}
+      </p>
     </div>
   );
 }
