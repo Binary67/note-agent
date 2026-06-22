@@ -143,8 +143,6 @@ export function useKnowledgeBase() {
   });
 
   const {
-    maxRetrievedDocuments,
-    setMaxRetrievedDocuments,
     chatInput,
     setChatInput,
     messages,
@@ -384,8 +382,6 @@ export function useKnowledgeBase() {
     setIsContextCollapsed,
     selectedFolderIds,
     selectedDocumentIds,
-    maxRetrievedDocuments,
-    setMaxRetrievedDocuments,
     chatInput,
     setChatInput,
     messages,

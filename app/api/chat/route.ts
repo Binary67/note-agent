@@ -1,16 +1,10 @@
-import {
-  DEFAULT_MAX_RETRIEVED_DOCUMENTS,
-  MAX_RETRIEVED_DOCUMENTS,
-  MIN_RETRIEVED_DOCUMENTS,
-  answerQuestion,
-} from "@/lib/retrieval";
+import { answerQuestion } from "@/lib/retrieval";
 import { recordQuestionAnswered } from "@/lib/analytics";
 
 type ChatRequest = {
   question?: unknown;
   selectedDocumentIds?: unknown;
   selectedFolderIds?: unknown;
-  maxRetrievedDocuments?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -32,21 +26,12 @@ export async function POST(request: Request) {
   const selectedFolderIds = Array.isArray(body.selectedFolderIds)
     ? body.selectedFolderIds.filter((id): id is string => typeof id === "string")
     : [];
-  const maxRetrievedDocuments =
-    typeof body.maxRetrievedDocuments === "number" &&
-    Number.isFinite(body.maxRetrievedDocuments)
-      ? Math.min(
-          MAX_RETRIEVED_DOCUMENTS,
-          Math.max(MIN_RETRIEVED_DOCUMENTS, Math.trunc(body.maxRetrievedDocuments)),
-        )
-      : DEFAULT_MAX_RETRIEVED_DOCUMENTS;
 
   try {
     const result = await answerQuestion({
       question: body.question,
       selectedDocumentIds,
       selectedFolderIds,
-      maxRetrievedDocuments,
     });
 
     try {

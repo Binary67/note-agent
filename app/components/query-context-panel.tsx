@@ -5,14 +5,9 @@ import { ContextTree } from "@/app/components/context-tree";
 import { plural } from "@/lib/utils";
 import type { FolderRecord, UploadItem } from "@/app/types";
 
-const retrievedDocumentsMin = 1;
-const retrievedDocumentsMax = 10;
-
 export type QueryContextPanelProps = {
   documentFilter: string;
   onDocumentFilterChange: (value: string) => void;
-  maxRetrievedDocuments: number;
-  onMaxRetrievedDocumentsChange: (value: number) => void;
   indexedDocuments: UploadItem[];
   filteredIndexedFolders: Array<{ folder: FolderRecord; count: number }>;
   documentsByFolder: Map<string, UploadItem[]>;
@@ -26,8 +21,6 @@ export type QueryContextPanelProps = {
 export function QueryContextPanel({
   documentFilter,
   onDocumentFilterChange,
-  maxRetrievedDocuments,
-  onMaxRetrievedDocumentsChange,
   indexedDocuments,
   filteredIndexedFolders,
   documentsByFolder,
@@ -40,7 +33,6 @@ export function QueryContextPanel({
   const hasFoldersSelected = selectedFolderIds.length > 0;
   const hasDocsSelected = selectedDocumentIds.length > 0;
   const hasSelection = hasFoldersSelected || hasDocsSelected;
-  const pureFullRead = hasDocsSelected && !hasFoldersSelected;
 
   const selectedFolderNames = selectedFolderIds
     .map((folderId) => folderNameById.get(folderId))
@@ -81,33 +73,6 @@ export function QueryContextPanel({
             onChange={(event) => onDocumentFilterChange(event.target.value)}
           />
         </label>
-
-        {!pureFullRead ? (
-          <div className="mt-3 rounded-control bg-surface-muted p-3">
-            <div className="flex items-center justify-between gap-3 text-xs">
-              <span className="text-muted">Top matches</span>
-              <span className="font-medium text-ink">
-                {maxRetrievedDocuments}
-              </span>
-            </div>
-            <input
-              aria-label="Retrieved documents"
-              className="mt-3 h-2 w-full cursor-pointer accent-accent"
-              min={retrievedDocumentsMin}
-              max={retrievedDocumentsMax}
-              step={1}
-              type="range"
-              value={maxRetrievedDocuments}
-              onChange={(event) =>
-                onMaxRetrievedDocumentsChange(Number(event.target.value))
-              }
-            />
-            <div className="mt-1 flex justify-between text-[11px] text-subtle">
-              <span>{retrievedDocumentsMin}</span>
-              <span>{retrievedDocumentsMax}</span>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2">

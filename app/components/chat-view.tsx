@@ -12,8 +12,6 @@ export type ChatViewProps = {
   onToggleContextCollapsed: () => void;
   documentFilter: string;
   onDocumentFilterChange: (value: string) => void;
-  maxRetrievedDocuments: number;
-  onMaxRetrievedDocumentsChange: (value: number) => void;
   indexedDocuments: UploadItem[];
   filteredIndexedFolders: Array<{ folder: FolderRecord; count: number }>;
   documentsByFolder: Map<string, UploadItem[]>;
@@ -36,8 +34,6 @@ export function ChatView({
   onToggleContextCollapsed,
   documentFilter,
   onDocumentFilterChange,
-  maxRetrievedDocuments,
-  onMaxRetrievedDocumentsChange,
   indexedDocuments,
   filteredIndexedFolders,
   documentsByFolder,
@@ -77,8 +73,6 @@ export function ChatView({
         <QueryContextPanel
           documentFilter={documentFilter}
           onDocumentFilterChange={onDocumentFilterChange}
-          maxRetrievedDocuments={maxRetrievedDocuments}
-          onMaxRetrievedDocumentsChange={onMaxRetrievedDocumentsChange}
           indexedDocuments={indexedDocuments}
           filteredIndexedFolders={filteredIndexedFolders}
           documentsByFolder={documentsByFolder}

@@ -49,8 +49,6 @@ export default function Home() {
               onToggleContextCollapsed={() => kb.setIsContextCollapsed((current) => !current)}
               documentFilter={kb.documentFilter}
               onDocumentFilterChange={kb.setDocumentFilter}
-              maxRetrievedDocuments={kb.maxRetrievedDocuments}
-              onMaxRetrievedDocumentsChange={kb.setMaxRetrievedDocuments}
               indexedDocuments={kb.indexedDocuments}
               filteredIndexedFolders={kb.filteredIndexedFolders}
               documentsByFolder={kb.documentsByFolder}

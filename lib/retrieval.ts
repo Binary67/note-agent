@@ -9,9 +9,7 @@ import {
   readSource,
 } from "./storage";
 
-export const DEFAULT_MAX_RETRIEVED_DOCUMENTS = 3;
-export const MIN_RETRIEVED_DOCUMENTS = 1;
-export const MAX_RETRIEVED_DOCUMENTS = 10;
+const DEFAULT_MAX_RETRIEVED_DOCUMENTS = 5;
 
 export type AnswerDocument = {
   id: string;
@@ -208,34 +206,32 @@ async function loadIndexedDocuments(records: DocumentRecord[]): Promise<IndexedD
   return documents.filter((document): document is IndexedDocument => document !== null);
 }
 
-async function readSelectedDocuments(records: DocumentRecord[]): Promise<ContextDocument[]> {
-  return Promise.all(
-    records.map(async (record) => ({
-      id: record.id,
-      name: record.name,
-      text: await readSource(record.id),
-      source: "selected" as const,
-    })),
-  );
-}
-
 async function retrieveDocuments(
   question: string,
-  maxRetrievedDocuments: number,
-  folderIds: string[] = [],
+  {
+    documentIds = [],
+    folderIds = [],
+  }: {
+    documentIds?: string[];
+    folderIds?: string[];
+  } = {},
 ): Promise<ContextDocument[]> {
+  const documentSet = new Set(documentIds);
   const folderSet = new Set(folderIds);
+  const hasScope = documentSet.size > 0 || folderSet.size > 0;
   const records = (await listDocuments()).filter(
     (record) =>
       record.status === "Indexed" &&
-      (folderSet.size === 0 || (record.folderId !== null && folderSet.has(record.folderId))),
+      (!hasScope ||
+        documentSet.has(record.id) ||
+        (record.folderId !== null && folderSet.has(record.folderId))),
   );
   const indexedDocuments = await loadIndexedDocuments(records);
 
   if (indexedDocuments.length === 0) {
     throw new Error(
-      folderSet.size > 0
-        ? "No indexed documents are available in the selected folders."
+      hasScope
+        ? "No indexed documents are available in the selected context."
         : "No indexed documents are available for chat.",
     );
   }
@@ -301,18 +297,15 @@ async function retrieveDocuments(
   const selectedDocuments =
     rankedDocuments.length > 0 ? rankedDocuments : fallbackDocuments;
 
-  const documentLimit = Math.min(
-    MAX_RETRIEVED_DOCUMENTS,
-    Math.max(MIN_RETRIEVED_DOCUMENTS, maxRetrievedDocuments),
-  );
-
   return selectedDocuments
-    .slice(0, documentLimit)
+    .slice(0, DEFAULT_MAX_RETRIEVED_DOCUMENTS)
     .map((document) => ({
       id: document.record.id,
       name: document.record.name,
       text: document.text,
-      source: "retrieved" as const,
+      source: documentSet.has(document.record.id)
+        ? ("selected" as const)
+        : ("retrieved" as const),
       score: document.score,
       semanticScore: document.semanticScore,
       bm25Score: document.bm25Score,
@@ -359,12 +352,10 @@ export async function answerQuestion({
   question,
   selectedDocumentIds = [],
   selectedFolderIds = [],
-  maxRetrievedDocuments = DEFAULT_MAX_RETRIEVED_DOCUMENTS,
 }: {
   question: string;
   selectedDocumentIds?: string[];
   selectedFolderIds?: string[];
-  maxRetrievedDocuments?: number;
 }): Promise<AnswerResult> {
   const trimmedQuestion = question.trim();
 
@@ -374,61 +365,27 @@ export async function answerQuestion({
 
   const selectedIds = Array.from(new Set(selectedDocumentIds.filter(Boolean)));
   const selectedFolders = Array.from(new Set(selectedFolderIds.filter(Boolean)));
-  const records = await listDocuments();
   let documents: ContextDocument[];
   let mode: AnswerResult["mode"];
 
   if (selectedIds.length > 0 && selectedFolders.length > 0) {
-    const folderSet = new Set(selectedFolders);
-    const standaloneRecords = selectedIds
-      .map((id) => records.find((record) => record.id === id))
-      .filter(
-        (record): record is DocumentRecord =>
-          record !== undefined &&
-          record.status === "Indexed" &&
-          !(record.folderId !== null && folderSet.has(record.folderId)),
-      );
-
-    if (standaloneRecords.length === 0) {
-      documents = await retrieveDocuments(
-        trimmedQuestion,
-        maxRetrievedDocuments,
-        selectedFolders,
-      );
-      mode = "folder";
-    } else {
-      const retrieved = await retrieveDocuments(
-        trimmedQuestion,
-        maxRetrievedDocuments,
-        selectedFolders,
-      );
-      const standalone = await readSelectedDocuments(standaloneRecords);
-      documents = [...retrieved, ...standalone];
-      mode = "mixed";
-    }
+    documents = await retrieveDocuments(trimmedQuestion, {
+      documentIds: selectedIds,
+      folderIds: selectedFolders,
+    });
+    mode = "mixed";
   } else if (selectedIds.length > 0) {
-    const selectedRecords = selectedIds
-      .map((id) => records.find((record) => record.id === id))
-      .filter(
-        (record): record is DocumentRecord =>
-          record !== undefined && record.status === "Indexed",
-      );
-
-    if (selectedRecords.length === 0) {
-      throw new Error("Select at least one indexed document for chat.");
-    }
-
-    documents = await readSelectedDocuments(selectedRecords);
+    documents = await retrieveDocuments(trimmedQuestion, {
+      documentIds: selectedIds,
+    });
     mode = "selected";
   } else if (selectedFolders.length > 0) {
-    documents = await retrieveDocuments(
-      trimmedQuestion,
-      maxRetrievedDocuments,
-      selectedFolders,
-    );
+    documents = await retrieveDocuments(trimmedQuestion, {
+      folderIds: selectedFolders,
+    });
     mode = "folder";
   } else {
-    documents = await retrieveDocuments(trimmedQuestion, maxRetrievedDocuments);
+    documents = await retrieveDocuments(trimmedQuestion);
     mode = "retrieved";
   }
 

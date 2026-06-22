@@ -22,7 +22,6 @@ export function useKnowledgeChat({
   setActiveView,
 }: UseKnowledgeChatParams) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [maxRetrievedDocuments, setMaxRetrievedDocuments] = useState(3);
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(createInitialMessages);
   const [isAnswering, setIsAnswering] = useState(false);
@@ -63,7 +62,6 @@ export function useKnowledgeChat({
             question,
             selectedDocumentIds,
             selectedFolderIds,
-            maxRetrievedDocuments,
           }),
         }),
       );
@@ -96,14 +94,11 @@ export function useKnowledgeChat({
     chatInput,
     indexedDocumentsLength,
     isAnswering,
-    maxRetrievedDocuments,
     selectedDocumentIds,
     selectedFolderIds,
   ]);
 
   return {
-    maxRetrievedDocuments,
-    setMaxRetrievedDocuments,
     chatInput,
     setChatInput,
     messages,
