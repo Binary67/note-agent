@@ -8,6 +8,7 @@ import {
 type ChatRequest = {
   question?: unknown;
   selectedDocumentIds?: unknown;
+  selectedFolderIds?: unknown;
   maxRetrievedDocuments?: unknown;
 };
 
@@ -27,6 +28,9 @@ export async function POST(request: Request) {
   const selectedDocumentIds = Array.isArray(body.selectedDocumentIds)
     ? body.selectedDocumentIds.filter((id): id is string => typeof id === "string")
     : [];
+  const selectedFolderIds = Array.isArray(body.selectedFolderIds)
+    ? body.selectedFolderIds.filter((id): id is string => typeof id === "string")
+    : [];
   const maxRetrievedDocuments =
     typeof body.maxRetrievedDocuments === "number" &&
     Number.isFinite(body.maxRetrievedDocuments)
@@ -40,6 +44,7 @@ export async function POST(request: Request) {
     const result = await answerQuestion({
       question: body.question,
       selectedDocumentIds,
+      selectedFolderIds,
       maxRetrievedDocuments,
     });
 

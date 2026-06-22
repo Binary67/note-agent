@@ -1,6 +1,7 @@
 import "server-only";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { folderNamesEqual, normalizeFolderName } from "@/lib/folders";
 
 export type UploadStatus = "Ready" | "Ingesting" | "Indexed" | "Error";
 
@@ -10,6 +11,12 @@ export type DocumentRecord = {
   size: string;
   status: UploadStatus;
   uploadedAt: string;
+  folderId: string | null;
+};
+
+export type FolderRecord = {
+  id: string;
+  name: string;
 };
 
 export type Chunk = {
@@ -26,6 +33,7 @@ export type DocIndex = {
 
 const ROOT = path.join(process.cwd(), "data");
 const REGISTRY_PATH = path.join(ROOT, "registry.json");
+const FOLDERS_PATH = path.join(ROOT, "folders.json");
 const DOCS_DIR = path.join(ROOT, "documents");
 
 async function ensureDir(dir: string): Promise<void> {
@@ -50,12 +58,25 @@ export function formatBytes(bytes: number): string {
 }
 
 export async function listDocuments(): Promise<DocumentRecord[]> {
-  return readJson<DocumentRecord[]>(REGISTRY_PATH, []);
+  const docs = await readJson<Array<DocumentRecord & { folderId?: string | null }>>(
+    REGISTRY_PATH,
+    [],
+  );
+  return docs.map((doc) => ({ ...doc, folderId: doc.folderId ?? null }));
+}
+
+export async function listFolders(): Promise<FolderRecord[]> {
+  return readJson<FolderRecord[]>(FOLDERS_PATH, []);
 }
 
 async function writeDocuments(docs: DocumentRecord[]): Promise<void> {
   await ensureDir(ROOT);
   await fs.writeFile(REGISTRY_PATH, JSON.stringify(docs, null, 2), "utf8");
+}
+
+async function writeFolders(folders: FolderRecord[]): Promise<void> {
+  await ensureDir(ROOT);
+  await fs.writeFile(FOLDERS_PATH, JSON.stringify(folders, null, 2), "utf8");
 }
 
 export async function getDocument(id: string): Promise<DocumentRecord | null> {
@@ -75,8 +96,31 @@ export async function addDocument(
     size: formatBytes(sizeBytes),
     status: "Ready",
     uploadedAt: "Just now",
+    folderId: null,
   };
   await writeDocuments([record, ...docs]);
+  return record;
+}
+
+export async function ensureFolder(name: string): Promise<FolderRecord> {
+  const normalizedName = normalizeFolderName(name);
+
+  if (!normalizedName) {
+    throw new Error("Folder name is required.");
+  }
+
+  const folders = await listFolders();
+  const existing = folders.find((folder) => folderNamesEqual(folder.name, normalizedName));
+
+  if (existing) {
+    return existing;
+  }
+
+  const record: FolderRecord = {
+    id: `folder-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: normalizedName,
+  };
+  await writeFolders([record, ...folders]);
   return record;
 }
 

@@ -24,7 +24,7 @@ export type AnswerDocument = {
 
 export type AnswerResult = {
   answer: string;
-  mode: "selected" | "retrieved";
+  mode: "selected" | "retrieved" | "folder";
   documents: AnswerDocument[];
 };
 
@@ -222,12 +222,22 @@ async function readSelectedDocuments(records: DocumentRecord[]): Promise<Context
 async function retrieveDocuments(
   question: string,
   maxRetrievedDocuments: number,
+  folderIds: string[] = [],
 ): Promise<ContextDocument[]> {
-  const records = (await listDocuments()).filter((record) => record.status === "Indexed");
+  const folderSet = new Set(folderIds);
+  const records = (await listDocuments()).filter(
+    (record) =>
+      record.status === "Indexed" &&
+      (folderSet.size === 0 || (record.folderId !== null && folderSet.has(record.folderId))),
+  );
   const indexedDocuments = await loadIndexedDocuments(records);
 
   if (indexedDocuments.length === 0) {
-    throw new Error("No indexed documents are available for chat.");
+    throw new Error(
+      folderSet.size > 0
+        ? "No indexed documents are available in the selected folders."
+        : "No indexed documents are available for chat.",
+    );
   }
 
   const queryEmbedding = await embedQuery(question);
@@ -348,10 +358,12 @@ async function generateAnswer(
 export async function answerQuestion({
   question,
   selectedDocumentIds = [],
+  selectedFolderIds = [],
   maxRetrievedDocuments = DEFAULT_MAX_RETRIEVED_DOCUMENTS,
 }: {
   question: string;
   selectedDocumentIds?: string[];
+  selectedFolderIds?: string[];
   maxRetrievedDocuments?: number;
 }): Promise<AnswerResult> {
   const trimmedQuestion = question.trim();
@@ -361,6 +373,7 @@ export async function answerQuestion({
   }
 
   const selectedIds = Array.from(new Set(selectedDocumentIds.filter(Boolean)));
+  const selectedFolders = Array.from(new Set(selectedFolderIds.filter(Boolean)));
   const records = await listDocuments();
   let documents: ContextDocument[];
   let mode: AnswerResult["mode"];
@@ -379,6 +392,13 @@ export async function answerQuestion({
 
     documents = await readSelectedDocuments(selectedRecords);
     mode = "selected";
+  } else if (selectedFolders.length > 0) {
+    documents = await retrieveDocuments(
+      trimmedQuestion,
+      maxRetrievedDocuments,
+      selectedFolders,
+    );
+    mode = "folder";
   } else {
     documents = await retrieveDocuments(trimmedQuestion, maxRetrievedDocuments);
     mode = "retrieved";

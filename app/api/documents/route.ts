@@ -1,8 +1,8 @@
-import { addDocument, listDocuments, saveSource } from "@/lib/storage";
+import { addDocument, listDocuments, listFolders, saveSource } from "@/lib/storage";
 
 export async function GET() {
-  const docs = await listDocuments();
-  return Response.json({ documents: docs });
+  const [docs, folders] = await Promise.all([listDocuments(), listFolders()]);
+  return Response.json({ documents: docs, folders });
 }
 
 export async function POST(request: Request) {
@@ -21,8 +21,9 @@ export async function POST(request: Request) {
       return addDocument(id, file.name, file.size);
     }),
   );
+  const folders = await listFolders();
 
-  return Response.json({ documents: created });
+  return Response.json({ documents: created, folders });
 }
 
 function isTextFile(value: FormDataEntryValue): value is File {

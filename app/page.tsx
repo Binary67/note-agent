@@ -44,6 +44,7 @@ import {
   SidebarItem,
   StatusPill,
 } from "@/app/components/ui";
+import { folderNamesEqual, normalizeFolderName } from "@/lib/folders";
 
 type UploadStatus = "Ready" | "Ingesting" | "Indexed" | "Error";
 type ViewKey = "ingestion" | "chat";
@@ -54,6 +55,12 @@ type UploadItem = {
   size: string;
   status: UploadStatus;
   uploadedAt: string;
+  folderId: string | null;
+};
+
+type FolderRecord = {
+  id: string;
+  name: string;
 };
 
 type ChatDocument = {
@@ -72,16 +79,17 @@ type ChatMessage = {
   documents?: ChatDocument[];
 };
 
-type ListResponse = { documents: UploadItem[] };
-type UploadResponse = { documents: UploadItem[] };
+type ListResponse = { documents: UploadItem[]; folders: FolderRecord[] };
+type UploadResponse = { documents: UploadItem[]; folders: FolderRecord[] };
 type IngestResponse = { started: number };
 type DeleteResponse = { ok: boolean };
-type RenameResponse = { document: UploadItem };
+type DocumentUpdateResponse = { document: UploadItem; folders: FolderRecord[] };
 type ChatResponse = {
   answer: string;
-  mode: "selected" | "retrieved";
+  mode: "selected" | "retrieved" | "folder";
   documents: ChatDocument[];
 };
+type ScopeMode = "all" | "folders" | "documents";
 
 const navigationItems: Array<{
   label: string;
@@ -160,12 +168,15 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [activeView, setActiveView] = useState<ViewKey>("chat");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const [folders, setFolders] = useState<FolderRecord[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
   const [notice, setNotice] = useState("Drop files here or browse from your computer.");
   const [documentFilter, setDocumentFilter] = useState("");
   const [isContextCollapsed, setIsContextCollapsed] = useState(false);
+  const [scopeMode, setScopeMode] = useState<ScopeMode>("all");
+  const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [maxRetrievedDocuments, setMaxRetrievedDocuments] = useState(3);
   const [chatInput, setChatInput] = useState("");
@@ -178,6 +189,7 @@ export default function Home() {
     try {
       const data = await parseJson<ListResponse>(await fetch("/api/documents"));
       setUploads(data.documents);
+      setFolders(data.folders);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Failed to load documents.");
     }
@@ -204,12 +216,35 @@ export default function Home() {
     () => new Set(indexedDocuments.map((document) => document.id)),
     [indexedDocuments],
   );
+  const folderNameById = useMemo(
+    () => new Map(folders.map((folder) => [folder.id, folder.name])),
+    [folders],
+  );
+  const indexedFolderCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const document of indexedDocuments) {
+      if (document.folderId) {
+        counts.set(document.folderId, (counts.get(document.folderId) ?? 0) + 1);
+      }
+    }
+
+    return counts;
+  }, [indexedDocuments]);
+  const indexedFolderIds = useMemo(
+    () => new Set(indexedFolderCounts.keys()),
+    [indexedFolderCounts],
+  );
 
   useEffect(() => {
     setSelectedDocumentIds((current) =>
       current.filter((id) => indexedDocumentIds.has(id)),
     );
   }, [indexedDocumentIds]);
+
+  useEffect(() => {
+    setSelectedFolderIds((current) => current.filter((id) => indexedFolderIds.has(id)));
+  }, [indexedFolderIds]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
@@ -227,9 +262,36 @@ export default function Home() {
     );
   }, [documentFilter, indexedDocuments]);
 
+  const indexedFolderOptions = useMemo(
+    () =>
+      folders
+        .map((folder) => ({
+          folder,
+          count: indexedFolderCounts.get(folder.id) ?? 0,
+        }))
+        .filter((item) => item.count > 0),
+    [folders, indexedFolderCounts],
+  );
+
+  const filteredIndexedFolders = useMemo(() => {
+    const query = documentFilter.trim().toLowerCase();
+
+    if (!query) {
+      return indexedFolderOptions;
+    }
+
+    return indexedFolderOptions.filter(({ folder }) =>
+      folder.name.toLowerCase().includes(query),
+    );
+  }, [documentFilter, indexedFolderOptions]);
+
   const selectedDocumentSet = useMemo(
     () => new Set(selectedDocumentIds),
     [selectedDocumentIds],
+  );
+  const selectedFolderSet = useMemo(
+    () => new Set(selectedFolderIds),
+    [selectedFolderIds],
   );
 
   const stats = useMemo(
@@ -343,6 +405,7 @@ export default function Home() {
         await fetch("/api/documents", { method: "POST", body: formData }),
       );
       setUploads((current) => [...data.documents, ...current]);
+      setFolders(data.folders);
       setNotice(`${plural(textFiles.length, "file")} added to the ingestion queue.`);
       setActiveView("ingestion");
     } catch (error) {
@@ -419,7 +482,7 @@ export default function Home() {
     }
 
     try {
-      const data = await parseJson<RenameResponse>(
+      const data = await parseJson<DocumentUpdateResponse>(
         await fetch(`/api/documents/${target.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -431,10 +494,33 @@ export default function Home() {
           upload.id === target.id ? { ...upload, name: data.document.name } : upload,
         ),
       );
+      setFolders(data.folders);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Failed to rename document.");
     } finally {
       setRenameTarget(null);
+    }
+  }
+
+  async function assignDocumentFolder(target: UploadItem, folderName: string | null) {
+    try {
+      const data = await parseJson<DocumentUpdateResponse>(
+        await fetch(`/api/documents/${target.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            folderName: folderName === null ? null : normalizeFolderName(folderName),
+          }),
+        }),
+      );
+      setUploads((current) =>
+        current.map((upload) =>
+          upload.id === target.id ? { ...upload, folderId: data.document.folderId } : upload,
+        ),
+      );
+      setFolders(data.folders);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to update folder.");
     }
   }
 
@@ -468,6 +554,14 @@ export default function Home() {
     );
   }
 
+  function toggleFolder(id: string) {
+    setSelectedFolderIds((current) =>
+      current.includes(id)
+        ? current.filter((selectedId) => selectedId !== id)
+        : [...current, id],
+    );
+  }
+
   function resetChat() {
     setActiveView("chat");
     setChatInput("");
@@ -480,7 +574,13 @@ export default function Home() {
 
     const question = chatInput.trim();
 
-    if (!question || isAnswering || indexedDocuments.length === 0) {
+    if (
+      !question ||
+      isAnswering ||
+      indexedDocuments.length === 0 ||
+      (scopeMode === "folders" && selectedFolderIds.length === 0) ||
+      (scopeMode === "documents" && selectedDocumentIds.length === 0)
+    ) {
       return;
     }
 
@@ -498,7 +598,8 @@ export default function Home() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             question,
-            selectedDocumentIds,
+            selectedDocumentIds: scopeMode === "documents" ? selectedDocumentIds : [],
+            selectedFolderIds: scopeMode === "folders" ? selectedFolderIds : [],
             maxRetrievedDocuments,
           }),
         }),
@@ -538,7 +639,37 @@ export default function Home() {
   }
 
   const chatCanSubmit =
-    chatInput.trim().length > 0 && !isAnswering && indexedDocuments.length > 0;
+    chatInput.trim().length > 0 &&
+    !isAnswering &&
+    indexedDocuments.length > 0 &&
+    (scopeMode !== "folders" || selectedFolderIds.length > 0) &&
+    (scopeMode !== "documents" || selectedDocumentIds.length > 0);
+  const activeScopeTitle =
+    scopeMode === "folders"
+      ? selectedFolderIds.length > 0
+        ? plural(selectedFolderIds.length, "selected folder")
+        : "Select folders"
+      : scopeMode === "documents"
+        ? selectedDocumentIds.length > 0
+          ? plural(selectedDocumentIds.length, "selected document")
+          : "Select documents"
+        : "All indexed documents";
+  const activeScopeDescription =
+    scopeMode === "folders"
+      ? selectedFolderIds.length > 0
+        ? "Hybrid search is limited to selected folders."
+        : "Choose one or more folders for this chat."
+      : scopeMode === "documents"
+        ? selectedDocumentIds.length > 0
+          ? "Selected documents are read directly."
+          : "Choose one or more documents for this chat."
+        : "Hybrid search chooses full documents to read.";
+  const chatStatusLabel =
+    scopeMode === "folders"
+      ? "Folder Scope"
+      : scopeMode === "documents"
+        ? "Document Scope"
+        : "Hybrid Retrieval";
 
   return (
     <main className="min-h-screen bg-canvas text-ink">
@@ -607,14 +738,10 @@ export default function Home() {
                         Query Context
                       </p>
                       <h2 className="mt-1 truncate text-base font-semibold text-ink">
-                        {selectedDocumentIds.length > 0
-                          ? plural(selectedDocumentIds.length, "selected document")
-                          : "All indexed documents"}
+                        {activeScopeTitle}
                       </h2>
                       <p className="mt-1 text-[13px] leading-5 text-muted">
-                        {selectedDocumentIds.length > 0
-                          ? "Selected documents are read directly."
-                          : "Hybrid search chooses full documents to read."}
+                        {activeScopeDescription}
                       </p>
                     </div>
                   </div>
@@ -624,31 +751,37 @@ export default function Home() {
                       <Search className="size-4 text-subtle" />
                       <input
                         className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-subtle"
-                        placeholder="Filter documents"
+                        placeholder={
+                          scopeMode === "folders" ? "Filter folders" : "Filter documents"
+                        }
                         value={documentFilter}
                         onChange={(event) => setDocumentFilter(event.target.value)}
                       />
                     </label>
 
-                    <button
-                      className="mt-3 flex h-9 w-full items-center gap-3 rounded-control px-2 text-left text-[13px] transition hover:bg-surface-muted"
-                      type="button"
-                      onClick={() => setSelectedDocumentIds([])}
-                    >
-                      <span
-                        className={cx(
-                          "flex size-4 shrink-0 items-center justify-center rounded-[4px] border",
-                          selectedDocumentIds.length === 0
-                            ? "border-accent bg-accent text-white"
-                            : "border-line-strong bg-surface",
-                        )}
-                      >
-                        {selectedDocumentIds.length === 0 && <Check className="size-3" />}
-                      </span>
-                      <span className="min-w-0 flex-1 font-medium text-ink">All Documents</span>
-                    </button>
+                    <div className="mt-3 grid grid-cols-3 rounded-control bg-surface-muted p-1">
+                      {(["all", "folders", "documents"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          className={cx(
+                            "h-7 rounded-[7px] text-xs font-medium transition",
+                            scopeMode === mode
+                              ? "bg-surface text-ink shadow-sm"
+                              : "text-muted hover:text-ink",
+                          )}
+                          type="button"
+                          onClick={() => setScopeMode(mode)}
+                        >
+                          {mode === "all"
+                            ? "All"
+                            : mode === "folders"
+                              ? "Folders"
+                              : "Documents"}
+                        </button>
+                      ))}
+                    </div>
 
-                    {selectedDocumentIds.length === 0 ? (
+                    {scopeMode !== "documents" ? (
                       <div className="mt-3 rounded-control bg-surface-muted p-3">
                         <div className="flex items-center justify-between gap-3 text-xs">
                           <span className="text-muted">Retrieved documents</span>
@@ -691,6 +824,82 @@ export default function Home() {
                           Import and index documents before chatting.
                         </p>
                       </div>
+                    ) : scopeMode === "all" ? (
+                      filteredIndexedDocuments.length === 0 ? (
+                        <div className="px-2 py-8 text-center text-[13px] text-muted">
+                          No documents match the filter.
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          {filteredIndexedDocuments.map((document) => {
+                            const { stem, ext } = splitName(document.name);
+                            const folderName = document.folderId
+                              ? folderNameById.get(document.folderId)
+                              : null;
+                            return (
+                              <div
+                                key={document.id}
+                                className="flex items-start gap-3 rounded-control px-2 py-2"
+                              >
+                                <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[4px] bg-surface-muted text-subtle">
+                                  <FileText className="size-3" />
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block truncate text-[13px] font-medium text-ink">
+                                    {stem}
+                                  </span>
+                                  <span className="mt-0.5 block text-xs text-muted">
+                                    {typeLabel(ext)} · {document.size}
+                                    {folderName ? ` · ${folderName}` : ""}
+                                  </span>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )
+                    ) : scopeMode === "folders" ? (
+                      filteredIndexedFolders.length === 0 ? (
+                        <div className="px-2 py-8 text-center text-[13px] text-muted">
+                          No indexed folders match the filter.
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          {filteredIndexedFolders.map(({ folder, count }) => (
+                            <label
+                              key={folder.id}
+                              className="flex cursor-pointer items-start gap-3 rounded-control px-2 py-2 transition hover:bg-surface-muted"
+                            >
+                              <input
+                                className="sr-only"
+                                checked={selectedFolderSet.has(folder.id)}
+                                type="checkbox"
+                                onChange={() => toggleFolder(folder.id)}
+                              />
+                              <span
+                                className={cx(
+                                  "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[4px] border",
+                                  selectedFolderSet.has(folder.id)
+                                    ? "border-accent bg-accent text-white"
+                                    : "border-line-strong bg-surface",
+                                )}
+                              >
+                                {selectedFolderSet.has(folder.id) && (
+                                  <Check className="size-3" />
+                                )}
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-[13px] font-medium text-ink">
+                                  {folder.name}
+                                </span>
+                                <span className="mt-0.5 block text-xs text-muted">
+                                  {plural(count, "indexed document")}
+                                </span>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      )
                     ) : filteredIndexedDocuments.length === 0 ? (
                       <div className="px-2 py-8 text-center text-[13px] text-muted">
                         No documents match the filter.
@@ -763,9 +972,11 @@ export default function Home() {
                         Knowledge Chat
                       </h2>
                       <p className="mt-0.5 truncate text-xs text-muted">
-                        {selectedDocumentIds.length > 0
+                        {scopeMode === "documents"
                           ? "Answering from selected full documents"
-                          : `Answering from top ${maxRetrievedDocuments} retrieved full documents`}
+                          : scopeMode === "folders"
+                            ? "Retrieving from selected folders"
+                            : `Answering from top ${maxRetrievedDocuments} retrieved full documents`}
                       </p>
                     </div>
                   </div>
@@ -780,8 +991,8 @@ export default function Home() {
                       <span className="hidden sm:inline">New Chat</span>
                     </button>
                     <span className="hidden sm:inline-flex">
-                      <StatusPill tone={selectedDocumentIds.length > 0 ? "accent" : "neutral"}>
-                        {selectedDocumentIds.length > 0 ? "Selected Scope" : "Hybrid Retrieval"}
+                      <StatusPill tone={scopeMode === "all" ? "neutral" : "accent"}>
+                        {chatStatusLabel}
                       </StatusPill>
                     </span>
                   </div>
@@ -813,6 +1024,10 @@ export default function Home() {
                       placeholder={
                         indexedDocuments.length === 0
                           ? "Index documents before chatting"
+                          : scopeMode === "folders" && selectedFolderIds.length === 0
+                            ? "Select a folder before chatting"
+                            : scopeMode === "documents" && selectedDocumentIds.length === 0
+                              ? "Select documents before chatting"
                           : "Ask a question about your documents..."
                       }
                       value={chatInput}
@@ -899,7 +1114,7 @@ export default function Home() {
                   </span>
                 </label>
 
-                <section className="overflow-hidden rounded-panel border border-line bg-surface shadow-panel">
+                <section className="rounded-panel border border-line bg-surface shadow-panel">
                   <div className="flex h-12 items-center justify-between border-b border-line px-4">
                     <div>
                       <h3 className="text-[15px] font-semibold text-ink">Uploads</h3>
@@ -907,11 +1122,12 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-[minmax(0,1fr)_104px_64px] border-b border-line bg-surface-muted px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle sm:grid-cols-[minmax(0,1fr)_80px_112px_64px] md:grid-cols-[minmax(0,1fr)_80px_112px_92px_64px]">
+                  <div className="grid grid-cols-[minmax(0,1fr)_112px_64px] border-b border-line bg-surface-muted px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle sm:grid-cols-[minmax(0,1fr)_128px_80px_112px_64px] md:grid-cols-[minmax(0,1fr)_144px_80px_112px_92px_64px]">
                     <span>File</span>
-                    <span className="hidden sm:block">Size</span>
-                    <span>Status</span>
-                    <span className="hidden md:block">Date</span>
+                    <span className="hidden text-center sm:block">Folder</span>
+                    <span className="hidden text-center sm:block">Size</span>
+                    <span className="text-center">Status</span>
+                    <span className="hidden text-center md:block">Date</span>
                     <span />
                   </div>
 
@@ -927,10 +1143,13 @@ export default function Home() {
                     <div className="divide-y divide-line">
                       {uploads.map((upload) => {
                         const { stem, ext } = splitName(upload.name);
+                        const folderName = upload.folderId
+                          ? folderNameById.get(upload.folderId) ?? "Unknown folder"
+                          : "Unfiled";
                         return (
                         <div
                           key={upload.id}
-                          className="grid min-h-14 grid-cols-[minmax(0,1fr)_104px_64px] items-center px-4 py-2.5 text-[13px] sm:grid-cols-[minmax(0,1fr)_80px_112px_64px] md:grid-cols-[minmax(0,1fr)_80px_112px_92px_64px]"
+                          className="grid min-h-14 grid-cols-[minmax(0,1fr)_112px_64px] items-center px-4 py-2.5 text-[13px] sm:grid-cols-[minmax(0,1fr)_128px_80px_112px_64px] md:grid-cols-[minmax(0,1fr)_144px_80px_112px_92px_64px]"
                         >
                           <div className="flex min-w-0 items-center gap-3">
                             <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-surface-muted text-muted">
@@ -941,11 +1160,32 @@ export default function Home() {
                               <p className="mt-0.5 text-xs text-muted">
                                 {typeLabel(ext)}
                                 <span className="sm:hidden"> · {upload.size}</span>
+                                <span className="sm:hidden"> · {folderName}</span>
                               </p>
+                              <span className="mt-2 block sm:hidden">
+                                <FolderInlineInput
+                                  className="w-48"
+                                  folders={folders}
+                                  valueName={upload.folderId ? folderName : null}
+                                  onCommit={(nextFolderName) =>
+                                    void assignDocumentFolder(upload, nextFolderName)
+                                  }
+                                />
+                              </span>
                             </div>
                           </div>
-                          <span className="hidden text-muted sm:block">{upload.size}</span>
-                          <span>
+                          <span className="relative hidden min-w-0 sm:block">
+                            <FolderInlineInput
+                              className="w-full justify-center"
+                              folders={folders}
+                              valueName={upload.folderId ? folderName : null}
+                              onCommit={(nextFolderName) =>
+                                void assignDocumentFolder(upload, nextFolderName)
+                              }
+                            />
+                          </span>
+                          <span className="hidden text-center text-muted sm:block">{upload.size}</span>
+                          <span className="justify-self-center">
                             <StatusPill tone={statusTone(upload.status)}>
                               {upload.status === "Indexed" ? (
                                 <CheckCircle2 className="size-3.5" />
@@ -955,7 +1195,7 @@ export default function Home() {
                               {upload.status}
                             </StatusPill>
                           </span>
-                          <span className="hidden text-muted md:block">{upload.uploadedAt}</span>
+                          <span className="hidden text-center text-muted md:block">{upload.uploadedAt}</span>
                           <div className="flex items-center justify-end gap-1">
                             <button
                               className="flex size-8 items-center justify-center rounded-control text-subtle transition hover:bg-surface-muted hover:text-ink"
@@ -1053,6 +1293,202 @@ export default function Home() {
         onConfirm={confirmDelete}
       />
     </main>
+  );
+}
+
+function FolderInlineInput({
+  className,
+  folders,
+  valueName,
+  onCommit,
+}: {
+  className?: string;
+  folders: FolderRecord[];
+  valueName: string | null;
+  onCommit: (folderName: string | null) => void | Promise<void>;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [input, setInput] = useState("");
+  const normalizedInput = normalizeFolderName(input);
+  const exactFolder = normalizedInput
+    ? folders.find((folder) => folderNamesEqual(folder.name, normalizedInput))
+    : null;
+  const filteredFolders = folders.filter((folder) =>
+    normalizedInput
+      ? folder.name.toLowerCase().includes(normalizedInput.toLowerCase())
+      : true,
+  );
+
+  function beginEdit() {
+    setInput(valueName ?? "");
+    setEditing(true);
+  }
+
+  function cancel() {
+    setInput("");
+    setEditing(false);
+  }
+
+  function commit(folderName: string | null) {
+    const nextName = folderName ? normalizeFolderName(folderName) : null;
+    const isUnchanged =
+      (nextName === null && valueName === null) ||
+      (nextName !== null && valueName !== null && folderNamesEqual(valueName, nextName));
+
+    if (!isUnchanged) {
+      void onCommit(nextName);
+    }
+
+    cancel();
+  }
+
+  function commitInput() {
+    if (!normalizedInput) {
+      commit(null);
+      return;
+    }
+
+    commit(exactFolder?.name ?? normalizedInput);
+  }
+
+  useEffect(() => {
+    if (!editing) {
+      return;
+    }
+
+    const id = window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(id);
+    };
+  }, [editing]);
+
+  useEffect(() => {
+    if (!editing) {
+      return;
+    }
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setInput("");
+      setEditing(false);
+    };
+
+    document.addEventListener("pointerdown", onPointerDown);
+
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [editing]);
+
+  if (!editing) {
+    return (
+      <div ref={rootRef} className={cx("relative inline-flex max-w-full", className)}>
+        <button
+          className={cx(
+            "inline-flex h-8 max-w-full items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition",
+            valueName
+              ? "border-accent-soft bg-accent-soft text-accent hover:bg-surface-muted"
+              : "border-line bg-surface-muted text-muted hover:bg-surface-pressed",
+          )}
+          type="button"
+          onClick={beginEdit}
+        >
+          <FolderOpen className="size-3.5 shrink-0" />
+          <span className="truncate">{valueName ?? "Unfiled"}</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={rootRef} className={cx("relative inline-flex max-w-full", className)}>
+      <label className="flex h-8 w-full items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 text-xs text-muted shadow-sm focus-within:border-line-strong">
+        <Search className="size-3.5 shrink-0 text-subtle" />
+        <input
+          ref={inputRef}
+          className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-subtle"
+          placeholder="Folder"
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commitInput();
+            }
+
+            if (event.key === "Escape") {
+              event.stopPropagation();
+              cancel();
+            }
+          }}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </label>
+
+      <div className="absolute left-0 top-9 z-40 w-full rounded-panel border border-line bg-surface p-2 shadow-[0_12px_32px_rgba(0,0,0,0.16)]">
+        <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+          <button
+            className={cx(
+              "inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition hover:bg-surface-muted",
+              valueName
+                ? "border-line bg-surface-muted text-muted"
+                : "border-accent-soft bg-accent-soft text-accent",
+            )}
+            type="button"
+            onClick={() => commit(null)}
+          >
+            <FolderOpen className="size-3.5 shrink-0" />
+            <span className="truncate">Unfiled</span>
+          </button>
+
+          {filteredFolders.map((folder) => (
+            <button
+              key={folder.id}
+              className={cx(
+                "inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition hover:bg-surface-muted",
+                valueName && folderNamesEqual(valueName, folder.name)
+                  ? "border-accent-soft bg-accent-soft text-accent"
+                  : "border-line bg-surface-muted text-muted",
+              )}
+              type="button"
+              onClick={() => commit(folder.name)}
+            >
+              <span className="truncate">{folder.name}</span>
+              {valueName && folderNamesEqual(valueName, folder.name) && (
+                <Check className="size-3 text-accent" />
+              )}
+            </button>
+          ))}
+
+          {filteredFolders.length === 0 && !normalizedInput && (
+            <p className="px-2 py-1 text-xs text-muted">No folders yet.</p>
+          )}
+        </div>
+
+        {normalizedInput && !exactFolder && (
+          <div className="mt-2 border-t border-line pt-2">
+            <button
+              className="flex h-8 w-full min-w-0 items-center gap-2 rounded-control px-2 text-left text-[13px] text-ink transition hover:bg-surface-muted"
+              type="button"
+              onClick={() => commit(normalizedInput)}
+            >
+              <Plus className="size-4 text-subtle" />
+              <span className="min-w-0 flex-1 truncate">
+                Create &ldquo;{normalizedInput}&rdquo;
+              </span>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
