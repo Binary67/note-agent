@@ -59,7 +59,7 @@ export function QueryContextPanel({
     : "All documents";
 
   return (
-    <aside className="overflow-hidden rounded-panel border border-line bg-surface shadow-panel">
+    <aside className="flex min-h-0 flex-col overflow-hidden rounded-panel border border-line bg-surface shadow-panel">
       <div className="border-b border-line px-4 py-3.5">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
@@ -110,7 +110,7 @@ export function QueryContextPanel({
         ) : null}
       </div>
 
-      <div className="max-h-[calc(100vh-280px)] overflow-y-auto p-2">
+      <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {indexedDocuments.length === 0 ? (
           <div className="px-2 py-8 text-center">
             <FileText className="mx-auto size-6 text-subtle" />

@@ -20,7 +20,7 @@ export function Sidebar({
   onSelectView: (view: ViewKey) => void;
 }) {
   return (
-    <aside className="hidden w-[248px] shrink-0 border-r border-line bg-sidebar px-4 py-5 lg:flex lg:flex-col">
+    <aside className="hidden h-full w-[248px] shrink-0 border-r border-line bg-sidebar px-4 py-5 lg:flex lg:flex-col">
       <div className="flex items-center gap-3 px-1">
         <div className="flex size-8 items-center justify-center rounded-control bg-accent text-sm font-semibold text-white">
           R

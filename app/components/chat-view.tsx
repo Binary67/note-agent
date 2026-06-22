@@ -72,7 +72,7 @@ export function ChatView({
   return (
     <div
       className={cx(
-        "mx-auto grid w-full max-w-7xl flex-1 gap-4 px-5 py-5 md:px-7",
+        "mx-auto grid min-h-0 w-full max-w-7xl flex-1 gap-4 overflow-y-auto px-5 py-5 md:px-7 xl:overflow-hidden",
         !isContextCollapsed && "xl:grid-cols-[304px_minmax(0,1fr)]",
       )}
     >
@@ -93,7 +93,7 @@ export function ChatView({
         />
       )}
 
-      <section className="flex min-h-[calc(100vh-96px)] min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-surface shadow-panel">
+      <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-surface shadow-panel">
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
           <div className="flex min-w-0 items-center gap-2">
             <button

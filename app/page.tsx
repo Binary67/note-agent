@@ -12,12 +12,12 @@ export default function Home() {
   const pageTitle = kb.activeView === "chat" ? "Chat" : "Knowledge";
 
   return (
-    <main className="min-h-screen bg-canvas text-ink">
-      <div className="flex min-h-screen">
+    <main className="h-screen overflow-hidden bg-canvas text-ink">
+      <div className="flex h-full min-h-0">
         <Sidebar activeView={kb.activeView} onSelectView={kb.setActiveView} />
 
-        <section className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-line bg-toolbar px-4 backdrop-blur-xl md:px-6">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b border-line bg-toolbar px-4 backdrop-blur-xl md:px-6">
             <div className="flex min-w-0 items-center gap-4">
               <div className="flex size-8 items-center justify-center rounded-control bg-accent text-sm font-semibold text-white lg:hidden">
                 R

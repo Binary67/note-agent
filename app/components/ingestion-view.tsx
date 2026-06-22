@@ -82,7 +82,7 @@ export function IngestionView({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="mx-auto grid w-full max-w-7xl flex-1 gap-6 px-5 py-5 md:px-7 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="mx-auto grid min-h-0 w-full max-w-7xl flex-1 gap-6 overflow-y-auto px-5 py-5 md:px-7 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="min-w-0 space-y-5">
         <section className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
