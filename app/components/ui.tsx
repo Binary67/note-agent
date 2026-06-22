@@ -183,7 +183,7 @@ export function SecondaryButton({
     <button
       {...props}
       className={cx(
-        "inline-flex h-9 items-center justify-center gap-2 rounded-control border border-line bg-surface px-3.5 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-muted",
+        "inline-flex h-9 items-center justify-center gap-2 rounded-control border border-line bg-surface px-3.5 text-[13px] font-medium text-ink shadow-sm transition hover:bg-surface-muted disabled:cursor-not-allowed disabled:bg-surface-pressed disabled:text-subtle",
         className,
       )}
       type={type}

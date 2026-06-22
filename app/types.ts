@@ -1,4 +1,5 @@
 export type UploadStatus = "Ready" | "Ingesting" | "Indexed" | "Error";
+export type UploadProgressStatus = "active" | "complete" | "error";
 export type ViewKey = "ingestion" | "chat";
 
 export type UploadItem = {
@@ -13,6 +14,15 @@ export type UploadItem = {
 export type FolderRecord = {
   id: string;
   name: string;
+};
+
+export type UploadProgress = {
+  jobId: string;
+  status: UploadProgressStatus;
+  percent: number;
+  label: string;
+  detail: string | null;
+  updatedAt: number;
 };
 
 export type ChatDocument = {
@@ -33,7 +43,13 @@ export type ChatMessage = {
 
 export type ListResponse = { documents: UploadItem[]; folders: FolderRecord[] };
 export type UploadResponse = { documents: UploadItem[]; folders: FolderRecord[] };
+export type UploadProgressResponse = { progress: UploadProgress | null };
 export type IngestResponse = { started: number };
+export type KnowledgeImportResponse = {
+  documents: UploadItem[];
+  folders: FolderRecord[];
+  imported: number;
+};
 export type DeleteResponse = { ok: boolean };
 export type DocumentUpdateResponse = { document: UploadItem; folders: FolderRecord[] };
 export type ChatResponse = {

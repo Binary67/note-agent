@@ -2,6 +2,7 @@
 
 import { ChatView } from "@/app/components/chat-view";
 import { DeleteDialog } from "@/app/components/delete-dialog";
+import { ImportDialog } from "@/app/components/import-dialog";
 import { IngestionView } from "@/app/components/ingestion-view";
 import { RenameDialog } from "@/app/components/rename-dialog";
 import { Sidebar } from "@/app/components/sidebar";
@@ -66,7 +67,10 @@ export default function Home() {
               folders={kb.folders}
               isDragging={kb.isDragging}
               isUploading={kb.isUploading}
+              uploadProgress={kb.uploadProgress}
               isIngesting={kb.isIngesting}
+              isExporting={kb.isExporting}
+              isImporting={kb.isImporting}
               notice={kb.notice}
               stats={kb.stats}
               unassignedReadyCount={kb.unassignedReadyCount}
@@ -82,6 +86,8 @@ export default function Home() {
               onDrop={kb.handleDrop}
               onFileInputChange={kb.handleInputChange}
               onStartIngestion={() => void kb.startIngestion()}
+              onExportKnowledgeBase={() => void kb.exportKnowledgeBase()}
+              onImportKnowledgeBase={kb.importKnowledgeBase}
               onAssignDocumentFolder={kb.assignDocumentFolder}
               onOpenRename={kb.openRename}
               onOpenDelete={kb.openDelete}
@@ -100,6 +106,13 @@ export default function Home() {
         target={kb.deleteTarget}
         onClose={() => kb.setDeleteTarget(null)}
         onConfirm={kb.confirmDelete}
+      />
+
+      <ImportDialog
+        target={kb.importTarget}
+        isImporting={kb.isImporting}
+        onClose={() => kb.setImportTarget(null)}
+        onConfirm={kb.confirmImportKnowledgeBase}
       />
     </main>
   );

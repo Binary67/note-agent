@@ -35,6 +35,8 @@ const ROOT = path.join(process.cwd(), "data");
 const REGISTRY_PATH = path.join(ROOT, "registry.json");
 const FOLDERS_PATH = path.join(ROOT, "folders.json");
 const DOCS_DIR = path.join(ROOT, "documents");
+const BYTES_PER_KILOBYTE = 1024;
+const BYTES_PER_MEGABYTE = BYTES_PER_KILOBYTE * 1024;
 
 async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true });
@@ -53,7 +55,12 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
 }
 
 export function formatBytes(bytes: number): string {
-  const kilobytes = Math.max(1, Math.round(bytes / 1024));
+  if (bytes >= BYTES_PER_MEGABYTE) {
+    const megabytes = bytes / BYTES_PER_MEGABYTE;
+    return `${megabytes.toLocaleString(undefined, { maximumFractionDigits: 1 })} MB`;
+  }
+
+  const kilobytes = Math.max(1, Math.round(bytes / BYTES_PER_KILOBYTE));
   return `${kilobytes.toLocaleString()} KB`;
 }
 
@@ -159,6 +166,38 @@ export function sourcePath(id: string): string {
 
 export function indexPath(id: string): string {
   return path.join(DOCS_DIR, id, "index.json");
+}
+
+export async function replaceDataDir(nextRoot: string): Promise<void> {
+  const backupRoot = `${ROOT}.backup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  let hasBackup = false;
+
+  await ensureDir(path.dirname(ROOT));
+
+  try {
+    await fs.rename(ROOT, backupRoot);
+    hasBackup = true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  try {
+    await fs.rename(nextRoot, ROOT);
+
+    if (hasBackup) {
+      await fs.rm(backupRoot, { recursive: true, force: true });
+    }
+  } catch (error) {
+    await fs.rm(ROOT, { recursive: true, force: true }).catch(() => undefined);
+
+    if (hasBackup) {
+      await fs.rename(backupRoot, ROOT).catch(() => undefined);
+    }
+
+    throw error;
+  }
 }
 
 export async function saveSource(id: string, content: string): Promise<void> {

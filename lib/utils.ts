@@ -28,9 +28,13 @@ const AUDIO_MIME_TYPES = new Set([
   "video/webm",
 ]);
 
+const PDF_MIME_TYPES = new Set(["application/pdf"]);
+
 export const SUPPORTED_SOURCE_ACCEPT = [
   ".txt",
   "text/plain",
+  ".pdf",
+  "application/pdf",
   ".flac",
   ".m4a",
   ".mp3",
@@ -43,7 +47,7 @@ export const SUPPORTED_SOURCE_ACCEPT = [
   "audio/*",
 ].join(",");
 
-export type SourceFileKind = "text" | "audio";
+export type SourceFileKind = "text" | "audio" | "pdf";
 
 export function getSourceFileKind(file: Pick<File, "name" | "type">): SourceFileKind | null {
   const name = file.name.toLowerCase();
@@ -52,6 +56,10 @@ export function getSourceFileKind(file: Pick<File, "name" | "type">): SourceFile
 
   if (type === "text/plain" || ext === ".txt") {
     return "text";
+  }
+
+  if (PDF_MIME_TYPES.has(type) || ext === ".pdf") {
+    return "pdf";
   }
 
   if (AUDIO_EXTENSIONS.has(ext) || AUDIO_MIME_TYPES.has(type) || type.startsWith("audio/")) {
@@ -127,6 +135,7 @@ export function splitName(name: string): { stem: string; ext: string } {
 
 export function typeLabel(ext: string): string {
   if (ext === ".txt") return "Text document";
+  if (ext === ".pdf") return "PDF document";
   if (AUDIO_EXTENSIONS.has(ext.toLowerCase())) return "Audio transcript";
   return "Document";
 }

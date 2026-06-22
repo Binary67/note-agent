@@ -18,6 +18,8 @@ type AudioChunk = {
   path: string;
 };
 
+type TranscriptionProgressReporter = (completed: number, total: number) => void;
+
 function getClient(): AzureOpenAI {
   const { transcription } = getConfig();
 
@@ -120,7 +122,10 @@ async function transcribeChunk(
   return response.text.trim();
 }
 
-export async function transcribeAudio(file: File): Promise<string> {
+export async function transcribeAudio(
+  file: File,
+  onProgress?: TranscriptionProgressReporter,
+): Promise<string> {
   const { transcription } = getConfig();
   const client = getClient();
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "note-agent-audio-"));
@@ -130,7 +135,10 @@ export async function transcribeAudio(file: File): Promise<string> {
     const transcripts: string[] = [];
     let prompt = "";
 
-    for (const chunk of chunks) {
+    onProgress?.(0, chunks.length);
+
+    for (let i = 0; i < chunks.length; i += 1) {
+      const chunk = chunks[i];
       const stat = await fs.stat(chunk.path);
 
       if (stat.size > transcription.maxBytes) {
@@ -145,6 +153,8 @@ export async function transcribeAudio(file: File): Promise<string> {
         transcripts.push(text);
         prompt = text.slice(-PROMPT_TAIL_CHARS);
       }
+
+      onProgress?.(i + 1, chunks.length);
     }
 
     if (transcripts.length === 0) {

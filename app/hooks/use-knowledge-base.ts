@@ -25,22 +25,29 @@ import type {
   DocumentUpdateResponse,
   FolderRecord,
   IngestResponse,
+  KnowledgeImportResponse,
   ListResponse,
   UploadItem,
+  UploadProgress,
+  UploadProgressResponse,
   UploadResponse,
   ViewKey,
 } from "@/app/types";
 
 export function useKnowledgeBase() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const uploadProgressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [activeView, setActiveView] = useState<ViewKey>("chat");
+  const [activeView, setActiveView] = useState<ViewKey>("ingestion");
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [folders, setFolders] = useState<FolderRecord[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [isIngesting, setIsIngesting] = useState(false);
-  const [notice, setNotice] = useState("Drop text or audio files here.");
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [notice, setNotice] = useState("Drop text, PDF, or audio files here.");
   const [documentFilter, setDocumentFilter] = useState("");
   const [isContextCollapsed, setIsContextCollapsed] = useState(false);
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
@@ -51,6 +58,7 @@ export function useKnowledgeBase() {
   const [isAnswering, setIsAnswering] = useState(false);
   const [renameTarget, setRenameTarget] = useState<UploadItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UploadItem | null>(null);
+  const [importTarget, setImportTarget] = useState<File | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -74,6 +82,45 @@ export function useKnowledgeBase() {
   }, []);
 
   useEffect(() => stopPolling, [stopPolling]);
+
+  const stopUploadProgressPolling = useCallback(() => {
+    if (uploadProgressPollRef.current) {
+      clearInterval(uploadProgressPollRef.current);
+      uploadProgressPollRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => stopUploadProgressPolling, [stopUploadProgressPolling]);
+
+  const pollUploadProgress = useCallback(async (jobId: string) => {
+    try {
+      const data = await parseJson<UploadProgressResponse>(
+        await fetch(`/api/documents/progress?jobId=${encodeURIComponent(jobId)}`, {
+          cache: "no-store",
+        }),
+      );
+
+      if (!data.progress) {
+        return;
+      }
+
+      setUploadProgress(data.progress);
+
+      if (data.progress.status !== "active") {
+        stopUploadProgressPolling();
+      }
+    } catch {
+      // The upload request reports the user-facing error; progress polling is best-effort.
+    }
+  }, [stopUploadProgressPolling]);
+
+  const startUploadProgressPolling = useCallback((jobId: string) => {
+    stopUploadProgressPolling();
+    uploadProgressPollRef.current = setInterval(() => {
+      void pollUploadProgress(jobId);
+    }, 700);
+    void pollUploadProgress(jobId);
+  }, [pollUploadProgress, stopUploadProgressPolling]);
 
   const indexedDocuments = useMemo(
     () => uploads.filter((upload) => upload.status === "Indexed"),
@@ -271,11 +318,22 @@ export function useKnowledgeBase() {
     const sourceFiles = files.filter(isSupportedSourceFile);
 
     if (sourceFiles.length === 0) {
-      setNotice("Only .txt and supported audio files are supported.");
+      setNotice("Only .txt, .pdf, and supported audio files are supported.");
       return;
     }
 
+    const jobId = createId("upload");
+
     setIsUploading(true);
+    setUploadProgress({
+      jobId,
+      status: "active",
+      percent: 0,
+      label: "Starting upload",
+      detail: null,
+      updatedAt: Date.now(),
+    });
+    startUploadProgressPolling(jobId);
 
     try {
       const formData = new FormData();
@@ -284,7 +342,10 @@ export function useKnowledgeBase() {
       }
 
       const data = await parseJson<UploadResponse>(
-        await fetch("/api/documents", { method: "POST", body: formData }),
+        await fetch(`/api/documents?jobId=${encodeURIComponent(jobId)}`, {
+          method: "POST",
+          body: formData,
+        }),
       );
       setUploads((current) => [...data.documents, ...current]);
       setFolders(data.folders);
@@ -293,9 +354,11 @@ export function useKnowledgeBase() {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Upload failed.");
     } finally {
+      stopUploadProgressPolling();
+      setUploadProgress(null);
       setIsUploading(false);
     }
-  }, []);
+  }, [startUploadProgressPolling, stopUploadProgressPolling]);
 
   const handleInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     void handleFiles(event.target.files);
@@ -331,6 +394,98 @@ export function useKnowledgeBase() {
       setNotice(error instanceof Error ? error.message : "Ingestion failed to start.");
     }
   }, [refresh, stopPolling]);
+
+  const exportKnowledgeBase = useCallback(async () => {
+    if (isIngesting || stats.ingesting > 0) {
+      setNotice("Wait for indexing to finish before exporting.");
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      const response = await fetch("/api/knowledge/export");
+
+      if (!response.ok) {
+        await parseJson<unknown>(response);
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+
+      anchor.href = url;
+      anchor.download = `knowledge-base-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setNotice("Knowledge base exported.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Export failed.");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isIngesting, stats.ingesting]);
+
+  const importKnowledgeBase = useCallback((file: File | null) => {
+    if (!file) {
+      return;
+    }
+
+    if (isIngesting || stats.ingesting > 0) {
+      setNotice("Wait for indexing to finish before importing.");
+      return;
+    }
+
+    if (!file.name.toLowerCase().endsWith(".zip")) {
+      setNotice("Select a knowledge base zip file.");
+      return;
+    }
+
+    setImportTarget(file);
+  }, [isIngesting, stats.ingesting]);
+
+  const confirmImportKnowledgeBase = useCallback(async () => {
+    const file = importTarget;
+
+    if (!file || isImporting) {
+      return;
+    }
+
+    if (isIngesting || stats.ingesting > 0) {
+      setNotice("Wait for indexing to finish before importing.");
+      return;
+    }
+
+    setIsImporting(true);
+    stopPolling();
+    setIsIngesting(false);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const data = await parseJson<KnowledgeImportResponse>(
+        await fetch("/api/knowledge/import", { method: "POST", body: formData }),
+      );
+
+      setUploads(data.documents);
+      setFolders(data.folders);
+      setSelectedFolderIds([]);
+      setSelectedDocumentIds([]);
+      setChatInput("");
+      setMessages(createInitialMessages());
+      setActiveView("ingestion");
+      setNotice(`${plural(data.imported, "document")} imported.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Import failed.");
+    } finally {
+      setIsImporting(false);
+      setImportTarget(null);
+    }
+  }, [importTarget, isImporting, isIngesting, stats.ingesting, stopPolling]);
 
   const openRename = useCallback((target: UploadItem) => {
     setRenameTarget(target);
@@ -514,7 +669,10 @@ export function useKnowledgeBase() {
     isDragging,
     setIsDragging,
     isUploading,
+    uploadProgress,
     isIngesting,
+    isExporting,
+    isImporting,
     notice,
     documentFilter,
     setDocumentFilter,
@@ -532,6 +690,8 @@ export function useKnowledgeBase() {
     setRenameTarget,
     deleteTarget,
     setDeleteTarget,
+    importTarget,
+    setImportTarget,
     indexedDocuments,
     documentsByFolder,
     folderNameById,
@@ -545,6 +705,9 @@ export function useKnowledgeBase() {
     handleInputChange,
     handleDrop,
     startIngestion,
+    exportKnowledgeBase,
+    importKnowledgeBase,
+    confirmImportKnowledgeBase,
     openRename,
     openDelete,
     confirmRename,

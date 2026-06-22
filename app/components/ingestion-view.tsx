@@ -1,11 +1,24 @@
 "use client";
 
-import { CheckCircle2, CloudUpload, FileText, Pencil, RefreshCcw, Upload, X } from "lucide-react";
-import { type ChangeEvent, type DragEvent, useRef } from "react";
+import {
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  CloudUpload,
+  Download,
+  FileText,
+  FileUp,
+  Pencil,
+  RefreshCcw,
+  Upload,
+  X,
+} from "lucide-react";
+import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from "react";
 import {
   cx,
   InspectorPanel,
   PrimaryButton,
+  SecondaryButton,
   StatusPill,
 } from "@/app/components/ui";
 import { FolderInlineInput } from "@/app/components/folder-inline-input";
@@ -17,14 +30,19 @@ import {
   SUPPORTED_SOURCE_ACCEPT,
   typeLabel,
 } from "@/lib/utils";
-import type { FolderRecord, UploadItem } from "@/app/types";
+import type { FolderRecord, UploadItem, UploadProgress } from "@/app/types";
+
+const UPLOADS_PER_PAGE = 5;
 
 export type IngestionViewProps = {
   uploads: UploadItem[];
   folders: FolderRecord[];
   isDragging: boolean;
   isUploading: boolean;
+  uploadProgress: UploadProgress | null;
   isIngesting: boolean;
+  isExporting: boolean;
+  isImporting: boolean;
   notice: string;
   stats: {
     total: number;
@@ -52,6 +70,8 @@ export type IngestionViewProps = {
   onDrop: (event: DragEvent<HTMLLabelElement>) => void;
   onFileInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onStartIngestion: () => void;
+  onExportKnowledgeBase: () => void | Promise<void>;
+  onImportKnowledgeBase: (file: File | null) => void | Promise<void>;
   onAssignDocumentFolder: (target: UploadItem, folderName: string | null) => void | Promise<void>;
   onOpenRename: (target: UploadItem) => void;
   onOpenDelete: (target: UploadItem) => void;
@@ -62,7 +82,10 @@ export function IngestionView({
   folders,
   isDragging,
   isUploading,
+  uploadProgress,
   isIngesting,
+  isExporting,
+  isImporting,
   notice,
   stats,
   unassignedReadyCount,
@@ -75,11 +98,39 @@ export function IngestionView({
   onDrop,
   onFileInputChange,
   onStartIngestion,
+  onExportKnowledgeBase,
+  onImportKnowledgeBase,
   onAssignDocumentFolder,
   onOpenRename,
   onOpenDelete,
 }: IngestionViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const previousUploadCountRef = useRef(uploads.length);
+  const [uploadPage, setUploadPage] = useState(1);
+  const uploadPageCount = Math.max(1, Math.ceil(uploads.length / UPLOADS_PER_PAGE));
+  const currentUploadPage = Math.min(uploadPage, uploadPageCount);
+  const uploadPageStart = (currentUploadPage - 1) * UPLOADS_PER_PAGE;
+  const visibleUploads = uploads.slice(uploadPageStart, uploadPageStart + UPLOADS_PER_PAGE);
+  const firstVisibleUpload = uploads.length === 0 ? 0 : uploadPageStart + 1;
+  const lastVisibleUpload = uploadPageStart + visibleUploads.length;
+  const hasUploadPagination = uploads.length > UPLOADS_PER_PAGE;
+  const isTransferDisabled = isIngesting || stats.ingesting > 0 || isExporting || isImporting;
+  const uploadProgressPercent = Math.min(100, Math.max(0, Math.round(uploadProgress?.percent ?? 0)));
+
+  useEffect(() => {
+    const previousUploadCount = previousUploadCountRef.current;
+
+    if (uploads.length > previousUploadCount) {
+      setUploadPage(1);
+    } else {
+      setUploadPage((currentPage) =>
+        Math.min(currentPage, Math.max(1, Math.ceil(uploads.length / UPLOADS_PER_PAGE))),
+      );
+    }
+
+    previousUploadCountRef.current = uploads.length;
+  }, [uploads.length]);
 
   return (
     <div className="mx-auto grid min-h-0 w-full max-w-7xl flex-1 gap-6 overflow-y-auto px-5 py-5 md:px-7 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -122,17 +173,33 @@ export function IngestionView({
             multiple
             onChange={onFileInputChange}
           />
-          <span className="flex min-w-0 items-center gap-3">
+          <span className="flex min-w-0 flex-1 items-center gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
               <CloudUpload className="size-5" />
             </span>
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1">
               <span className="block text-[15px] font-semibold text-ink">
                 Drop files here
               </span>
               <span className="mt-0.5 block truncate text-[13px] text-muted">
-                {isUploading ? "Uploading..." : notice}
+                {isUploading ? "Uploading and extracting..." : notice}
               </span>
+              {isUploading && (
+                <span
+                  className="mt-2 block h-1.5 w-full max-w-sm overflow-hidden rounded-full bg-surface-pressed"
+                  role="progressbar"
+                  aria-label="Upload and extraction progress"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={uploadProgressPercent}
+                  aria-valuetext={uploadProgress?.label ?? "Uploading and extracting"}
+                >
+                  <span
+                    className="block h-full rounded-full bg-accent transition-[width] duration-300 ease-out"
+                    style={{ width: `${uploadProgressPercent}%` }}
+                  />
+                </span>
+              )}
             </span>
           </span>
           <span className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-control bg-accent px-3.5 text-[13px] font-semibold text-white transition group-hover:bg-accent-hover">
@@ -168,82 +235,115 @@ export function IngestionView({
             </div>
           ) : (
             <div className="divide-y divide-line">
-              {uploads.map((upload) => {
+              {visibleUploads.map((upload) => {
                 const { stem, ext } = splitName(upload.name);
                 const folderName = upload.folderId
                   ? folderNameById.get(upload.folderId) ?? "Unknown folder"
                   : "Unfiled";
                 return (
-                <div
-                  key={upload.id}
-                  className="grid min-h-14 grid-cols-[minmax(0,1fr)_112px_64px] items-center px-4 py-2.5 text-[13px] sm:grid-cols-[minmax(0,1fr)_128px_80px_112px_64px] md:grid-cols-[minmax(0,1fr)_144px_80px_112px_92px_64px]"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-surface-muted text-muted">
-                      <FileText className="size-4" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-ink">{stem}</p>
-                      <p className="mt-0.5 text-xs text-muted">
-                        {typeLabel(ext)}
-                        <span className="sm:hidden"> · {upload.size}</span>
-                        <span className="sm:hidden"> · {folderName}</span>
-                      </p>
-                      <span className="mt-2 block sm:hidden">
-                        <FolderInlineInput
-                          className="w-48"
-                          folders={folders}
-                          valueName={upload.folderId ? folderName : null}
-                          onCommit={(nextFolderName) =>
-                            onAssignDocumentFolder(upload, nextFolderName)
-                          }
-                        />
+                  <div
+                    key={upload.id}
+                    className="grid min-h-14 grid-cols-[minmax(0,1fr)_112px_64px] items-center px-4 py-2.5 text-[13px] sm:grid-cols-[minmax(0,1fr)_128px_80px_112px_64px] md:grid-cols-[minmax(0,1fr)_144px_80px_112px_92px_64px]"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-surface-muted text-muted">
+                        <FileText className="size-4" />
                       </span>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-ink">{stem}</p>
+                        <p className="mt-0.5 text-xs text-muted">
+                          {typeLabel(ext)}
+                          <span className="sm:hidden"> · {upload.size}</span>
+                          <span className="sm:hidden"> · {folderName}</span>
+                        </p>
+                        <span className="mt-2 block sm:hidden">
+                          <FolderInlineInput
+                            className="w-48"
+                            folders={folders}
+                            valueName={upload.folderId ? folderName : null}
+                            onCommit={(nextFolderName) =>
+                              onAssignDocumentFolder(upload, nextFolderName)
+                            }
+                          />
+                        </span>
+                      </div>
+                    </div>
+                    <span className="relative hidden min-w-0 sm:block">
+                      <FolderInlineInput
+                        className="w-full justify-center"
+                        folders={folders}
+                        valueName={upload.folderId ? folderName : null}
+                        onCommit={(nextFolderName) =>
+                          onAssignDocumentFolder(upload, nextFolderName)
+                        }
+                      />
+                    </span>
+                    <span className="hidden text-center text-muted sm:block">{upload.size}</span>
+                    <span className="justify-self-center">
+                      <StatusPill tone={statusTone(upload.status)}>
+                        {upload.status === "Indexed" ? (
+                          <CheckCircle2 className="size-3.5" />
+                        ) : (
+                          <span className="size-1.5 rounded-full bg-current" />
+                        )}
+                        {upload.status}
+                      </StatusPill>
+                    </span>
+                    <span className="hidden text-center text-muted md:block">{upload.uploadedAt}</span>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        className="flex size-8 items-center justify-center rounded-control text-subtle transition hover:bg-surface-muted hover:text-ink"
+                        type="button"
+                        aria-label={`Rename ${upload.name}`}
+                        onClick={() => onOpenRename(upload)}
+                      >
+                        <Pencil className="size-4" />
+                      </button>
+                      <button
+                        className="flex size-8 items-center justify-center rounded-control text-subtle transition hover:bg-surface-muted hover:text-ink"
+                        type="button"
+                        aria-label={`Remove ${upload.name}`}
+                        onClick={() => onOpenDelete(upload)}
+                      >
+                        <X className="size-4" />
+                      </button>
                     </div>
                   </div>
-                  <span className="relative hidden min-w-0 sm:block">
-                    <FolderInlineInput
-                      className="w-full justify-center"
-                      folders={folders}
-                      valueName={upload.folderId ? folderName : null}
-                      onCommit={(nextFolderName) =>
-                        onAssignDocumentFolder(upload, nextFolderName)
-                      }
-                    />
-                  </span>
-                  <span className="hidden text-center text-muted sm:block">{upload.size}</span>
-                  <span className="justify-self-center">
-                    <StatusPill tone={statusTone(upload.status)}>
-                      {upload.status === "Indexed" ? (
-                        <CheckCircle2 className="size-3.5" />
-                      ) : (
-                        <span className="size-1.5 rounded-full bg-current" />
-                      )}
-                      {upload.status}
-                    </StatusPill>
-                  </span>
-                  <span className="hidden text-center text-muted md:block">{upload.uploadedAt}</span>
-                  <div className="flex items-center justify-end gap-1">
-                    <button
-                      className="flex size-8 items-center justify-center rounded-control text-subtle transition hover:bg-surface-muted hover:text-ink"
-                      type="button"
-                      aria-label={`Rename ${upload.name}`}
-                      onClick={() => onOpenRename(upload)}
-                    >
-                      <Pencil className="size-4" />
-                    </button>
-                    <button
-                      className="flex size-8 items-center justify-center rounded-control text-subtle transition hover:bg-surface-muted hover:text-ink"
-                      type="button"
-                      aria-label={`Remove ${upload.name}`}
-                      onClick={() => onOpenDelete(upload)}
-                    >
-                      <X className="size-4" />
-                    </button>
-                  </div>
-                </div>
                 );
               })}
+            </div>
+          )}
+
+          {hasUploadPagination && (
+            <div className="flex flex-col gap-3 border-t border-line px-4 py-3 text-[13px] text-muted sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                Showing {firstVisibleUpload}-{lastVisibleUpload} of {uploads.length}
+              </span>
+              <nav className="flex items-center gap-2" aria-label="Uploads pagination">
+                <button
+                  className="flex size-8 items-center justify-center rounded-control border border-line text-subtle transition hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-45"
+                  type="button"
+                  aria-label="Previous uploads page"
+                  disabled={currentUploadPage === 1}
+                  onClick={() => setUploadPage((currentPage) => Math.max(1, currentPage - 1))}
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+                <span className="min-w-20 text-center text-xs font-medium text-muted">
+                  Page {currentUploadPage} of {uploadPageCount}
+                </span>
+                <button
+                  className="flex size-8 items-center justify-center rounded-control border border-line text-subtle transition hover:bg-surface-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-45"
+                  type="button"
+                  aria-label="Next uploads page"
+                  disabled={currentUploadPage === uploadPageCount}
+                  onClick={() =>
+                    setUploadPage((currentPage) => Math.min(uploadPageCount, currentPage + 1))
+                  }
+                >
+                  <ChevronRight className="size-4" />
+                </button>
+              </nav>
             </div>
           )}
         </section>
@@ -310,6 +410,36 @@ export function IngestionView({
                 : ""}
             </p>
           )}
+
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <SecondaryButton
+              className="w-full"
+              disabled={isTransferDisabled}
+              onClick={onExportKnowledgeBase}
+            >
+              <Download className="size-4" />
+              {isExporting ? "Exporting" : "Export"}
+            </SecondaryButton>
+            <SecondaryButton
+              className="w-full"
+              disabled={isTransferDisabled}
+              onClick={() => importInputRef.current?.click()}
+            >
+              <FileUp className="size-4" />
+              {isImporting ? "Importing" : "Import"}
+            </SecondaryButton>
+            <input
+              ref={importInputRef}
+              className="sr-only"
+              type="file"
+              accept=".zip,application/zip,application/x-zip-compressed"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                void onImportKnowledgeBase(file);
+                event.target.value = "";
+              }}
+            />
+          </div>
         </section>
       </InspectorPanel>
     </div>
