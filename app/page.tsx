@@ -397,6 +397,11 @@ export default function Home() {
     return { stem: name.slice(0, dot), ext: name.slice(dot) };
   }
 
+  function typeLabel(ext: string): string {
+    if (ext === ".txt") return "Text document";
+    return "Document";
+  }
+
   function openRename(target: UploadItem) {
     setRenameTarget(target);
   }
@@ -692,7 +697,9 @@ export default function Home() {
                       </div>
                     ) : (
                       <div className="space-y-1">
-                        {filteredIndexedDocuments.map((document) => (
+                        {filteredIndexedDocuments.map((document) => {
+                          const { stem, ext } = splitName(document.name);
+                          return (
                           <label
                             key={document.id}
                             className="flex cursor-pointer items-start gap-3 rounded-control px-2 py-2 transition hover:bg-surface-muted"
@@ -717,14 +724,15 @@ export default function Home() {
                             </span>
                             <span className="min-w-0">
                               <span className="block truncate text-[13px] font-medium text-ink">
-                                {document.name}
+                                {stem}
                               </span>
                               <span className="mt-0.5 block text-xs text-muted">
-                                Indexed - {document.size}
+                                {typeLabel(ext)} · {document.size}
                               </span>
                             </span>
                           </label>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -917,7 +925,9 @@ export default function Home() {
                     </div>
                   ) : (
                     <div className="divide-y divide-line">
-                      {uploads.map((upload) => (
+                      {uploads.map((upload) => {
+                        const { stem, ext } = splitName(upload.name);
+                        return (
                         <div
                           key={upload.id}
                           className="grid min-h-14 grid-cols-[minmax(0,1fr)_104px_64px] items-center px-4 py-2.5 text-[13px] sm:grid-cols-[minmax(0,1fr)_80px_112px_64px] md:grid-cols-[minmax(0,1fr)_80px_112px_92px_64px]"
@@ -927,9 +937,10 @@ export default function Home() {
                               <FileText className="size-4" />
                             </span>
                             <div className="min-w-0">
-                              <p className="truncate font-medium text-ink">{upload.name}</p>
-                              <p className="mt-0.5 text-xs text-muted sm:hidden">
-                                {upload.size}
+                              <p className="truncate font-medium text-ink">{stem}</p>
+                              <p className="mt-0.5 text-xs text-muted">
+                                {typeLabel(ext)}
+                                <span className="sm:hidden"> · {upload.size}</span>
                               </p>
                             </div>
                           </div>
@@ -964,7 +975,8 @@ export default function Home() {
                             </button>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </section>
@@ -1067,18 +1079,25 @@ function ChatMessageBubble({ message }: { message: ChatMessage }) {
 
         {isAssistant && message.documents && message.documents.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1.5 border-t border-line pt-2">
-            {message.documents.map((document) => (
+            {message.documents.map((document) => {
+              const dot = document.name.lastIndexOf(".");
+              const stem = dot > 0 ? document.name.slice(0, dot) : document.name;
+              const ext = dot > 0 ? document.name.slice(dot) : "";
+              const type = ext === ".txt" ? "Text document" : "Document";
+              return (
               <span
                 key={document.id}
                 className="inline-flex max-w-full items-center gap-1 rounded-[6px] bg-surface-muted px-2 py-1 text-xs text-muted ring-1 ring-line"
               >
                 <FileText className="size-3 shrink-0" />
-                <span className="truncate">{document.name}</span>
+                <span className="truncate">{stem}</span>
+                <span className="shrink-0 text-subtle">{type}</span>
                 <span className="shrink-0 text-subtle">
                   {document.source === "selected" ? "Selected" : "Retrieved"}
                 </span>
               </span>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
