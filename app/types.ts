@@ -1,6 +1,6 @@
 export type UploadStatus = "Ready" | "Ingesting" | "Indexed" | "Error";
 export type UploadProgressStatus = "active" | "complete" | "error";
-export type ViewKey = "ingestion" | "chat";
+export type ViewKey = "ingestion" | "chat" | "analytics";
 
 export type UploadItem = {
   id: string;
@@ -45,6 +45,27 @@ export type ListResponse = { documents: UploadItem[]; folders: FolderRecord[] };
 export type UploadResponse = { documents: UploadItem[]; folders: FolderRecord[] };
 export type UploadProgressResponse = { progress: UploadProgress | null };
 export type IngestResponse = { started: number };
+export type AnalyticsDay = {
+  date: string;
+  label: string;
+  questionsAnswered: number;
+  referencesReviewed: number;
+};
+export type AnalyticsResponse = {
+  questionsAnsweredToday: number;
+  questionsAnsweredThisWeek: number;
+  questionsAnsweredAllTime: number;
+  referencesReviewedToday: number;
+  referencesReviewedThisWeek: number;
+  referencesReviewedAllTime: number;
+  estimatedTimeSavedMinutes: number;
+  averageReferencesPerAnswer: number;
+  currentStreakDays: number;
+  activeDaysLast7: number;
+  todayDate: string;
+  weekStartDate: string;
+  daily: AnalyticsDay[];
+};
 export type KnowledgeImportResponse = {
   documents: UploadItem[];
   folders: FolderRecord[];

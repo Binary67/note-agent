@@ -4,6 +4,7 @@ import {
   MIN_RETRIEVED_DOCUMENTS,
   answerQuestion,
 } from "@/lib/retrieval";
+import { recordQuestionAnswered } from "@/lib/analytics";
 
 type ChatRequest = {
   question?: unknown;
@@ -47,6 +48,12 @@ export async function POST(request: Request) {
       selectedFolderIds,
       maxRetrievedDocuments,
     });
+
+    try {
+      await recordQuestionAnswered({ referencesReviewed: result.documents.length });
+    } catch (analyticsError) {
+      console.error("Failed to record question analytics:", analyticsError);
+    }
 
     return Response.json(result);
   } catch (error) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { AnalyticsView } from "@/app/components/analytics-view";
 import { ChatView } from "@/app/components/chat-view";
 import { DeleteDialog } from "@/app/components/delete-dialog";
 import { ImportDialog } from "@/app/components/import-dialog";
@@ -10,7 +11,12 @@ import { useKnowledgeBase } from "@/app/hooks/use-knowledge-base";
 
 export default function Home() {
   const kb = useKnowledgeBase();
-  const pageTitle = kb.activeView === "chat" ? "Chat" : "Knowledge";
+  const pageTitle =
+    kb.activeView === "chat"
+      ? "Chat"
+      : kb.activeView === "analytics"
+        ? "Analytics"
+        : "Knowledge";
 
   return (
     <main className="h-screen overflow-hidden bg-canvas text-ink">
@@ -61,6 +67,8 @@ export default function Home() {
               onSubmitChat={kb.submitChat}
               messagesEndRef={kb.messagesEndRef}
             />
+          ) : kb.activeView === "analytics" ? (
+            <AnalyticsView />
           ) : (
             <IngestionView
               uploads={kb.uploads}

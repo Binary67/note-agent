@@ -9,7 +9,7 @@ const navigationItems: Array<{
 }> = [
   { label: "Knowledge", icon: FolderOpen, view: "ingestion" },
   { label: "Chat", icon: MessageSquareText, view: "chat" },
-  { label: "Analytics", icon: ChartNoAxesColumn },
+  { label: "Analytics", icon: ChartNoAxesColumn, view: "analytics" },
 ];
 
 export function Sidebar({
