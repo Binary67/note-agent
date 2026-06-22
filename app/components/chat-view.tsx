@@ -5,25 +5,23 @@ import { type FormEvent, type KeyboardEvent } from "react";
 import { cx, StatusPill } from "@/app/components/ui";
 import { ChatMessageBubble } from "@/app/components/chat-message-bubble";
 import { QueryContextPanel } from "@/app/components/query-context-panel";
-import type { ChatMessage, FolderRecord, ScopeMode, UploadItem } from "@/app/types";
+import type { ChatMessage, FolderRecord, UploadItem } from "@/app/types";
 
 export type ChatViewProps = {
   isContextCollapsed: boolean;
   onToggleContextCollapsed: () => void;
-  scopeMode: ScopeMode;
-  onScopeModeChange: (mode: ScopeMode) => void;
   documentFilter: string;
   onDocumentFilterChange: (value: string) => void;
   maxRetrievedDocuments: number;
   onMaxRetrievedDocumentsChange: (value: number) => void;
   indexedDocuments: UploadItem[];
-  filteredIndexedDocuments: UploadItem[];
   filteredIndexedFolders: Array<{ folder: FolderRecord; count: number }>;
+  documentsByFolder: Map<string, UploadItem[]>;
   selectedFolderIds: string[];
   selectedDocumentIds: string[];
-  onToggleFolder: (id: string) => void;
-  onToggleDocument: (id: string) => void;
   folderNameById: Map<string, string>;
+  onToggleFolder: (folderId: string) => void;
+  onToggleDocument: (docId: string) => void;
   messages: ChatMessage[];
   isAnswering: boolean;
   chatInput: string;
@@ -36,20 +34,18 @@ export type ChatViewProps = {
 export function ChatView({
   isContextCollapsed,
   onToggleContextCollapsed,
-  scopeMode,
-  onScopeModeChange,
   documentFilter,
   onDocumentFilterChange,
   maxRetrievedDocuments,
   onMaxRetrievedDocumentsChange,
   indexedDocuments,
-  filteredIndexedDocuments,
   filteredIndexedFolders,
+  documentsByFolder,
   selectedFolderIds,
   selectedDocumentIds,
+  folderNameById,
   onToggleFolder,
   onToggleDocument,
-  folderNameById,
   messages,
   isAnswering,
   chatInput,
@@ -58,18 +54,21 @@ export function ChatView({
   onSubmitChat,
   messagesEndRef,
 }: ChatViewProps) {
+  const hasFoldersSelected = selectedFolderIds.length > 0;
+  const hasDocsSelected = selectedDocumentIds.length > 0;
+  const hasSelection = hasFoldersSelected || hasDocsSelected;
   const chatCanSubmit =
     chatInput.trim().length > 0 &&
     !isAnswering &&
-    indexedDocuments.length > 0 &&
-    (scopeMode !== "folders" || selectedFolderIds.length > 0) &&
-    (scopeMode !== "documents" || selectedDocumentIds.length > 0);
+    indexedDocuments.length > 0;
   const chatStatusLabel =
-    scopeMode === "folders"
-      ? "Folder Scope"
-      : scopeMode === "documents"
-        ? "Document Scope"
-        : "Hybrid Retrieval";
+    hasFoldersSelected && hasDocsSelected
+      ? "Mixed Scope"
+      : hasFoldersSelected
+        ? "Folder Scope"
+        : hasDocsSelected
+          ? "Document Scope"
+          : "Hybrid Retrieval";
 
   function handleChatKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -87,20 +86,18 @@ export function ChatView({
     >
       {!isContextCollapsed && (
         <QueryContextPanel
-          scopeMode={scopeMode}
-          onScopeModeChange={onScopeModeChange}
           documentFilter={documentFilter}
           onDocumentFilterChange={onDocumentFilterChange}
           maxRetrievedDocuments={maxRetrievedDocuments}
           onMaxRetrievedDocumentsChange={onMaxRetrievedDocumentsChange}
           indexedDocuments={indexedDocuments}
-          filteredIndexedDocuments={filteredIndexedDocuments}
           filteredIndexedFolders={filteredIndexedFolders}
+          documentsByFolder={documentsByFolder}
           selectedFolderIds={selectedFolderIds}
           selectedDocumentIds={selectedDocumentIds}
+          folderNameById={folderNameById}
           onToggleFolder={onToggleFolder}
           onToggleDocument={onToggleDocument}
-          folderNameById={folderNameById}
         />
       )}
 
@@ -128,11 +125,13 @@ export function ChatView({
                 Knowledge Chat
               </h2>
               <p className="mt-0.5 truncate text-xs text-muted">
-                {scopeMode === "documents"
-                  ? "Answering from selected full documents"
-                  : scopeMode === "folders"
+                {hasFoldersSelected && hasDocsSelected
+                  ? "Retrieving from folders and reading selected documents"
+                  : hasFoldersSelected
                     ? "Retrieving from selected folders"
-                    : `Answering from top ${maxRetrievedDocuments} retrieved full documents`}
+                    : hasDocsSelected
+                      ? "Answering from selected full documents"
+                      : `Answering from top ${maxRetrievedDocuments} retrieved full documents`}
               </p>
             </div>
           </div>
@@ -147,7 +146,7 @@ export function ChatView({
               <span className="hidden sm:inline">New Chat</span>
             </button>
             <span className="hidden sm:inline-flex">
-              <StatusPill tone={scopeMode === "all" ? "neutral" : "accent"}>
+              <StatusPill tone={hasSelection ? "accent" : "neutral"}>
                 {chatStatusLabel}
               </StatusPill>
             </span>
@@ -180,10 +179,6 @@ export function ChatView({
               placeholder={
                 indexedDocuments.length === 0
                   ? "Index documents before chatting"
-                  : scopeMode === "folders" && selectedFolderIds.length === 0
-                    ? "Select a folder before chatting"
-                    : scopeMode === "documents" && selectedDocumentIds.length === 0
-                      ? "Select documents before chatting"
                   : "Ask a question about your documents..."
               }
               value={chatInput}

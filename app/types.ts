@@ -1,6 +1,5 @@
 export type UploadStatus = "Ready" | "Ingesting" | "Indexed" | "Error";
 export type ViewKey = "ingestion" | "chat";
-export type ScopeMode = "all" | "folders" | "documents";
 
 export type UploadItem = {
   id: string;
@@ -39,6 +38,6 @@ export type DeleteResponse = { ok: boolean };
 export type DocumentUpdateResponse = { document: UploadItem; folders: FolderRecord[] };
 export type ChatResponse = {
   answer: string;
-  mode: "selected" | "retrieved" | "folder";
+  mode: "selected" | "retrieved" | "folder" | "mixed";
   documents: ChatDocument[];
 };

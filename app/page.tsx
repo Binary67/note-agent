@@ -39,20 +39,18 @@ export default function Home() {
             <ChatView
               isContextCollapsed={kb.isContextCollapsed}
               onToggleContextCollapsed={() => kb.setIsContextCollapsed((current) => !current)}
-              scopeMode={kb.scopeMode}
-              onScopeModeChange={kb.setScopeMode}
               documentFilter={kb.documentFilter}
               onDocumentFilterChange={kb.setDocumentFilter}
               maxRetrievedDocuments={kb.maxRetrievedDocuments}
               onMaxRetrievedDocumentsChange={kb.setMaxRetrievedDocuments}
               indexedDocuments={kb.indexedDocuments}
-              filteredIndexedDocuments={kb.filteredIndexedDocuments}
               filteredIndexedFolders={kb.filteredIndexedFolders}
+              documentsByFolder={kb.documentsByFolder}
               selectedFolderIds={kb.selectedFolderIds}
               selectedDocumentIds={kb.selectedDocumentIds}
+              folderNameById={kb.folderNameById}
               onToggleFolder={kb.toggleFolder}
               onToggleDocument={kb.toggleDocument}
-              folderNameById={kb.folderNameById}
               messages={kb.messages}
               isAnswering={kb.isAnswering}
               chatInput={kb.chatInput}
@@ -70,6 +68,7 @@ export default function Home() {
               isIngesting={kb.isIngesting}
               notice={kb.notice}
               stats={kb.stats}
+              unassignedReadyCount={kb.unassignedReadyCount}
               readiness={kb.readiness}
               indexSteps={kb.indexSteps}
               folderNameById={kb.folderNameById}

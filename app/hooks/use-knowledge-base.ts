@@ -26,7 +26,6 @@ import type {
   FolderRecord,
   IngestResponse,
   ListResponse,
-  ScopeMode,
   UploadItem,
   UploadResponse,
   ViewKey,
@@ -44,7 +43,6 @@ export function useKnowledgeBase() {
   const [notice, setNotice] = useState("Drop files here or browse from your computer.");
   const [documentFilter, setDocumentFilter] = useState("");
   const [isContextCollapsed, setIsContextCollapsed] = useState(false);
-  const [scopeMode, setScopeMode] = useState<ScopeMode>("all");
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [maxRetrievedDocuments, setMaxRetrievedDocuments] = useState(3);
@@ -105,6 +103,23 @@ export function useKnowledgeBase() {
     [indexedFolderCounts],
   );
 
+  const documentsByFolder = useMemo(() => {
+    const groups = new Map<string, UploadItem[]>();
+
+    for (const document of indexedDocuments) {
+      if (document.folderId) {
+        const existing = groups.get(document.folderId);
+        if (existing) {
+          existing.push(document);
+        } else {
+          groups.set(document.folderId, [document]);
+        }
+      }
+    }
+
+    return groups;
+  }, [indexedDocuments]);
+
   useEffect(() => {
     setSelectedDocumentIds((current) =>
       current.filter((id) => indexedDocumentIds.has(id)),
@@ -162,6 +177,13 @@ export function useKnowledgeBase() {
       ready: uploads.filter((upload) => upload.status === "Ready").length,
       errors: uploads.filter((upload) => upload.status === "Error").length,
     }),
+    [uploads],
+  );
+
+  const unassignedReadyCount = useMemo(
+    () =>
+      uploads.filter((upload) => upload.status === "Ready" && !upload.folderId)
+        .length,
     [uploads],
   );
 
@@ -402,13 +424,24 @@ export function useKnowledgeBase() {
     );
   }, []);
 
-  const toggleFolder = useCallback((id: string) => {
-    setSelectedFolderIds((current) =>
-      current.includes(id)
-        ? current.filter((selectedId) => selectedId !== id)
-        : [...current, id],
-    );
-  }, []);
+  const toggleFolder = useCallback(
+    (folderId: string) => {
+      const childDocIds = (documentsByFolder.get(folderId) ?? []).map(
+        (document) => document.id,
+      );
+      const childSet = new Set(childDocIds);
+
+      setSelectedFolderIds((current) =>
+        current.includes(folderId)
+          ? current.filter((selectedId) => selectedId !== folderId)
+          : [...current, folderId],
+      );
+      setSelectedDocumentIds((current) =>
+        current.filter((id) => !childSet.has(id)),
+      );
+    },
+    [documentsByFolder],
+  );
 
   const resetChat = useCallback(() => {
     setActiveView("chat");
@@ -422,13 +455,7 @@ export function useKnowledgeBase() {
 
     const question = chatInput.trim();
 
-    if (
-      !question ||
-      isAnswering ||
-      indexedDocuments.length === 0 ||
-      (scopeMode === "folders" && selectedFolderIds.length === 0) ||
-      (scopeMode === "documents" && selectedDocumentIds.length === 0)
-    ) {
+    if (!question || isAnswering || indexedDocuments.length === 0) {
       return;
     }
 
@@ -446,8 +473,8 @@ export function useKnowledgeBase() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             question,
-            selectedDocumentIds: scopeMode === "documents" ? selectedDocumentIds : [],
-            selectedFolderIds: scopeMode === "folders" ? selectedFolderIds : [],
+            selectedDocumentIds,
+            selectedFolderIds,
             maxRetrievedDocuments,
           }),
         }),
@@ -477,7 +504,7 @@ export function useKnowledgeBase() {
     } finally {
       setIsAnswering(false);
     }
-  }, [chatInput, isAnswering, indexedDocuments.length, scopeMode, selectedFolderIds, selectedDocumentIds, maxRetrievedDocuments]);
+  }, [chatInput, isAnswering, indexedDocuments.length, selectedFolderIds, selectedDocumentIds, maxRetrievedDocuments]);
 
   return {
     activeView,
@@ -493,8 +520,6 @@ export function useKnowledgeBase() {
     setDocumentFilter,
     isContextCollapsed,
     setIsContextCollapsed,
-    scopeMode,
-    setScopeMode,
     selectedFolderIds,
     selectedDocumentIds,
     maxRetrievedDocuments,
@@ -508,10 +533,12 @@ export function useKnowledgeBase() {
     deleteTarget,
     setDeleteTarget,
     indexedDocuments,
+    documentsByFolder,
     folderNameById,
     filteredIndexedDocuments,
     filteredIndexedFolders,
     stats,
+    unassignedReadyCount,
     readiness,
     indexSteps,
     messagesEndRef,

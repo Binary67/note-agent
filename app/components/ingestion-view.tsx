@@ -27,6 +27,7 @@ export type IngestionViewProps = {
     ready: number;
     errors: number;
   };
+  unassignedReadyCount: number;
   readiness: {
     label: string;
     title: string;
@@ -58,6 +59,7 @@ export function IngestionView({
   isIngesting,
   notice,
   stats,
+  unassignedReadyCount,
   readiness,
   indexSteps,
   folderNameById,
@@ -280,7 +282,7 @@ export function IngestionView({
 
           <PrimaryButton
             className="mt-4 w-full"
-            disabled={stats.ready === 0 || isIngesting}
+            disabled={stats.ready === 0 || isIngesting || unassignedReadyCount > 0}
             onClick={onStartIngestion}
           >
             {isIngesting
@@ -292,6 +294,16 @@ export function IngestionView({
                   : "Start Indexing"}
             <RefreshCcw className={cx("size-4", isIngesting && "animate-spin")} />
           </PrimaryButton>
+          {unassignedReadyCount > 0 && (
+            <p className="mt-2 text-xs leading-5 text-muted">
+              Assign folders to all ready documents before indexing.
+              {unassignedReadyCount > 0
+                ? ` ${unassignedReadyCount} ${
+                    unassignedReadyCount === 1 ? "document" : "documents"
+                  } unassigned.`
+                : ""}
+            </p>
+          )}
         </section>
       </InspectorPanel>
     </div>

@@ -24,7 +24,7 @@ export type AnswerDocument = {
 
 export type AnswerResult = {
   answer: string;
-  mode: "selected" | "retrieved" | "folder";
+  mode: "selected" | "retrieved" | "folder" | "mixed";
   documents: AnswerDocument[];
 };
 
@@ -378,7 +378,35 @@ export async function answerQuestion({
   let documents: ContextDocument[];
   let mode: AnswerResult["mode"];
 
-  if (selectedIds.length > 0) {
+  if (selectedIds.length > 0 && selectedFolders.length > 0) {
+    const folderSet = new Set(selectedFolders);
+    const standaloneRecords = selectedIds
+      .map((id) => records.find((record) => record.id === id))
+      .filter(
+        (record): record is DocumentRecord =>
+          record !== undefined &&
+          record.status === "Indexed" &&
+          !(record.folderId !== null && folderSet.has(record.folderId)),
+      );
+
+    if (standaloneRecords.length === 0) {
+      documents = await retrieveDocuments(
+        trimmedQuestion,
+        maxRetrievedDocuments,
+        selectedFolders,
+      );
+      mode = "folder";
+    } else {
+      const retrieved = await retrieveDocuments(
+        trimmedQuestion,
+        maxRetrievedDocuments,
+        selectedFolders,
+      );
+      const standalone = await readSelectedDocuments(standaloneRecords);
+      documents = [...retrieved, ...standalone];
+      mode = "mixed";
+    }
+  } else if (selectedIds.length > 0) {
     const selectedRecords = selectedIds
       .map((id) => records.find((record) => record.id === id))
       .filter(
