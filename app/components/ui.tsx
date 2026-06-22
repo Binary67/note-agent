@@ -36,20 +36,25 @@ export function SidebarItem({
   icon: Icon,
   label,
   active = false,
+  className,
+  type = "button",
+  ...props
 }: {
   icon: LucideIcon;
   label: string;
   active?: boolean;
-}) {
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
+      {...props}
       className={cx(
         "flex h-9 w-full items-center gap-3 rounded-control px-3 text-left text-[13px] transition",
         active
           ? "bg-surface-muted font-medium text-ink"
           : "text-muted hover:bg-surface-muted hover:text-ink",
+        className,
       )}
-      type="button"
+      type={type}
     >
       <Icon className={cx("size-4", active ? "text-accent" : "text-subtle")} />
       {label}
@@ -60,9 +65,11 @@ export function SidebarItem({
 export function SegmentedControl({
   items,
   activeItem,
+  onSelect,
 }: {
   items: string[];
   activeItem: string;
+  onSelect?: (item: string) => void;
 }) {
   return (
     <div className="hidden rounded-control bg-surface-muted p-0.5 md:flex">
@@ -75,6 +82,7 @@ export function SegmentedControl({
               ? "bg-surface text-ink shadow-sm"
               : "text-muted hover:text-ink",
           )}
+          onClick={() => onSelect?.(item)}
           type="button"
         >
           {item}
