@@ -22,7 +22,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { type ChangeEvent, type DragEvent, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, type DragEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type UploadStatus = "Ready" | "Ingesting" | "Indexed" | "Error";
 
@@ -34,29 +34,10 @@ type UploadItem = {
   uploadedAt: string;
 };
 
-const initialUploads: UploadItem[] = [
-  {
-    id: "seed-1",
-    name: "research-highlights.txt",
-    size: "84 KB",
-    status: "Indexed",
-    uploadedAt: "Today, 10:14",
-  },
-  {
-    id: "seed-2",
-    name: "meeting-notes-q3.txt",
-    size: "42 KB",
-    status: "Ingesting",
-    uploadedAt: "Today, 09:48",
-  },
-  {
-    id: "seed-3",
-    name: "product-questions.txt",
-    size: "18 KB",
-    status: "Ready",
-    uploadedAt: "Yesterday",
-  },
-];
+type ListResponse = { documents: UploadItem[] };
+type UploadResponse = { documents: UploadItem[] };
+type IngestResponse = { started: number };
+type DeleteResponse = { ok: boolean };
 
 const navigationItems = [
   { label: "Knowledge Base", icon: FolderOpen, active: true },
@@ -66,14 +47,16 @@ const navigationItems = [
 
 const topNavItems = ["Documents", "Ingestion", "History"];
 
-function formatBytes(bytes: number) {
-  const kilobytes = Math.max(1, Math.round(bytes / 1024));
-
-  return `${kilobytes.toLocaleString()} KB`;
-}
-
 function isTextFile(file: File) {
   return file.type === "text/plain" || file.name.toLowerCase().endsWith(".txt");
+}
+
+async function parseJson<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(text || `Request failed with status ${response.status}`);
+  }
+  return response.json() as Promise<T>;
 }
 
 function statusClasses(status: UploadStatus) {
@@ -94,9 +77,41 @@ function statusClasses(status: UploadStatus) {
 
 export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploads, setUploads] = useState(initialUploads);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isIngesting, setIsIngesting] = useState(false);
   const [notice, setNotice] = useState("Drop TXT files here or browse from your computer.");
+
+  const refresh = useCallback(async () => {
+    try {
+      const data = await parseJson<ListResponse>(await fetch("/api/documents"));
+      setUploads(data.documents);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to load documents.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const data = await parseJson<ListResponse>(await fetch("/api/documents"));
+        setUploads(data.documents);
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "Failed to load documents.");
+      }
+    })();
+  }, []);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => stopPolling, [stopPolling]);
 
   const stats = useMemo(
     () => ({
@@ -108,58 +123,83 @@ export default function Home() {
     [uploads],
   );
 
-  function handleFiles(fileList: FileList | null) {
+  async function handleFiles(fileList: FileList | null) {
     if (!fileList) {
       return;
     }
 
     const files = Array.from(fileList);
     const textFiles = files.filter(isTextFile);
-    const rejectedCount = files.length - textFiles.length;
 
     if (textFiles.length === 0) {
       setNotice("Only .txt files are supported in this first version.");
       return;
     }
 
-    const newUploads = textFiles.map((file, index) => ({
-      id: `${file.name}-${file.lastModified}-${index}`,
-      name: file.name,
-      size: formatBytes(file.size),
-      status: "Ready" as const,
-      uploadedAt: "Just now",
-    }));
+    setIsUploading(true);
 
-    setUploads((currentUploads) => [...newUploads, ...currentUploads]);
-    setNotice(
-      rejectedCount > 0
-        ? `${textFiles.length} TXT file added. ${rejectedCount} unsupported file ignored.`
-        : `${textFiles.length} TXT file added to the ingestion queue.`,
-    );
+    try {
+      const formData = new FormData();
+      for (const file of textFiles) {
+        formData.append("files", file);
+      }
+
+      const data = await parseJson<UploadResponse>(
+        await fetch("/api/documents", { method: "POST", body: formData }),
+      );
+      setUploads((current) => [...data.documents, ...current]);
+      setNotice(`${textFiles.length} TXT file added to the ingestion queue.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Upload failed.");
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   function handleInputChange(event: ChangeEvent<HTMLInputElement>) {
-    handleFiles(event.target.files);
+    void handleFiles(event.target.files);
     event.target.value = "";
   }
 
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setIsDragging(false);
-    handleFiles(event.dataTransfer.files);
+    void handleFiles(event.dataTransfer.files);
   }
 
-  function startIngestion() {
-    setUploads((currentUploads) =>
-      currentUploads.map((upload) =>
-        upload.status === "Ready" ? { ...upload, status: "Ingesting" } : upload,
-      ),
-    );
-    setNotice("Ready files moved into the local ingestion queue.");
+  async function startIngestion() {
+    setIsIngesting(true);
+    setNotice("Ingestion started. Processing ready documents...");
+
+    try {
+      await parseJson<IngestResponse>(await fetch("/api/ingest", { method: "POST" }));
+
+      pollRef.current = setInterval(async () => {
+        await refresh();
+        const stillIngesting = (await parseJson<ListResponse>(await fetch("/api/documents")))
+          .documents.some((doc) => doc.status === "Ingesting");
+
+        if (!stillIngesting) {
+          stopPolling();
+          setIsIngesting(false);
+          setNotice("Ingestion complete.");
+        }
+      }, 2000);
+    } catch (error) {
+      setIsIngesting(false);
+      setNotice(error instanceof Error ? error.message : "Ingestion failed to start.");
+    }
   }
 
-  function removeUpload(id: string) {
-    setUploads((currentUploads) => currentUploads.filter((upload) => upload.id !== id));
+  async function removeUpload(id: string) {
+    try {
+      await parseJson<DeleteResponse>(
+        await fetch(`/api/documents/${id}`, { method: "DELETE" }),
+      );
+      setUploads((current) => current.filter((upload) => upload.id !== id));
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to remove document.");
+    }
   }
 
   return (
@@ -305,7 +345,7 @@ export default function Home() {
               <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
                 <Metric label="Total" value={stats.total} />
                 <Metric label="Indexed" value={stats.indexed} />
-                <Metric label="Ready" value={stats.ready + stats.ingesting} />
+                <Metric label="Ready" value={stats.ready} />
               </div>
             </div>
 
@@ -337,7 +377,9 @@ export default function Home() {
               <span className="mt-4 text-xl font-semibold tracking-tight text-[#1d1d1f]">
                 Drag and drop TXT files here
               </span>
-              <span className="mt-2 text-sm text-slate-600">{notice}</span>
+              <span className="mt-2 text-sm text-slate-600">
+                {isUploading ? "Uploading..." : notice}
+              </span>
               <span className="mt-5 inline-flex h-10 items-center gap-2 rounded-lg bg-[#0066cc] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005bb8]">
                 <Upload className="size-4" />
                 Select Files
@@ -426,11 +468,11 @@ export default function Home() {
                   <button
                     className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#1d1d1f] px-4 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-slate-300"
                     type="button"
-                    disabled={stats.ready === 0}
-                    onClick={startIngestion}
+                    disabled={stats.ready === 0 || isIngesting}
+                    onClick={() => void startIngestion()}
                   >
-                    <RefreshCcw className="size-4" />
-                    Start Ingestion
+                    {isIngesting ? "Ingesting..." : "Start Ingestion"}
+                    <RefreshCcw className={`size-4 ${isIngesting ? "animate-spin" : ""}`} />
                   </button>
                 </div>
 
