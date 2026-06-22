@@ -12,6 +12,8 @@ import {
   FileText,
   FolderOpen,
   MessageSquareText,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   RefreshCcw,
   Search,
@@ -163,6 +165,7 @@ export default function Home() {
   const [isIngesting, setIsIngesting] = useState(false);
   const [notice, setNotice] = useState("Drop TXT files here or browse from your computer.");
   const [documentFilter, setDocumentFilter] = useState("");
+  const [isContextCollapsed, setIsContextCollapsed] = useState(false);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [maxRetrievedDocuments, setMaxRetrievedDocuments] = useState(3);
   const [chatInput, setChatInput] = useState("");
@@ -554,151 +557,178 @@ export default function Home() {
           </header>
 
           {activeView === "chat" ? (
-            <div className="mx-auto grid w-full max-w-7xl flex-1 gap-5 px-5 py-5 md:px-7 xl:grid-cols-[304px_minmax(0,1fr)]">
-              <aside className="overflow-hidden rounded-panel border border-line bg-surface shadow-panel">
-                <div className="border-b border-line p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
-                    Query Context
-                  </p>
-                  <h2 className="mt-1 text-base font-semibold text-ink">
-                    {selectedDocumentIds.length > 0
-                      ? plural(selectedDocumentIds.length, "selected document")
-                      : "All indexed documents"}
-                  </h2>
-                  <p className="mt-1 text-[13px] leading-5 text-muted">
-                    {selectedDocumentIds.length > 0
-                      ? "Selected documents are read directly."
-                      : "Hybrid search chooses full documents to read."}
-                  </p>
-                </div>
+            <div
+              className={cx(
+                "mx-auto grid w-full max-w-7xl flex-1 gap-5 px-5 py-5 md:px-7",
+                !isContextCollapsed && "xl:grid-cols-[304px_minmax(0,1fr)]",
+              )}
+            >
+              {!isContextCollapsed && (
+                <aside className="overflow-hidden rounded-panel border border-line bg-surface shadow-panel">
+                  <div className="border-b border-line p-4">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
+                        Query Context
+                      </p>
+                      <h2 className="mt-1 truncate text-base font-semibold text-ink">
+                        {selectedDocumentIds.length > 0
+                          ? plural(selectedDocumentIds.length, "selected document")
+                          : "All indexed documents"}
+                      </h2>
+                      <p className="mt-1 text-[13px] leading-5 text-muted">
+                        {selectedDocumentIds.length > 0
+                          ? "Selected documents are read directly."
+                          : "Hybrid search chooses full documents to read."}
+                      </p>
+                    </div>
+                  </div>
 
-                <div className="border-b border-line p-3">
-                  <label className="flex h-9 items-center gap-2 rounded-control border border-line bg-surface px-3 text-[13px] text-muted focus-within:border-line-strong">
-                    <Search className="size-4 text-subtle" />
-                    <input
-                      className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-subtle"
-                      placeholder="Filter documents"
-                      value={documentFilter}
-                      onChange={(event) => setDocumentFilter(event.target.value)}
-                    />
-                  </label>
-
-                  <button
-                    className="mt-3 flex h-9 w-full items-center gap-3 rounded-control px-2 text-left text-[13px] transition hover:bg-surface-muted"
-                    type="button"
-                    onClick={() => setSelectedDocumentIds([])}
-                  >
-                    <span
-                      className={cx(
-                        "flex size-4 shrink-0 items-center justify-center rounded-[4px] border",
-                        selectedDocumentIds.length === 0
-                          ? "border-accent bg-accent text-white"
-                          : "border-line-strong bg-surface",
-                      )}
-                    >
-                      {selectedDocumentIds.length === 0 && <Check className="size-3" />}
-                    </span>
-                    <span className="min-w-0 flex-1 font-medium text-ink">All Documents</span>
-                  </button>
-
-                  {selectedDocumentIds.length === 0 ? (
-                    <div className="mt-3 rounded-control bg-surface-muted p-3">
-                      <div className="flex items-center justify-between gap-3 text-xs">
-                        <span className="text-muted">Retrieved documents</span>
-                        <span className="font-medium text-ink">
-                          {plural(maxRetrievedDocuments, "document")}
-                        </span>
-                      </div>
+                  <div className="border-b border-line p-3">
+                    <label className="flex h-9 items-center gap-2 rounded-control border border-line bg-surface px-3 text-[13px] text-muted focus-within:border-line-strong">
+                      <Search className="size-4 text-subtle" />
                       <input
-                        aria-label="Retrieved documents"
-                        className="mt-3 h-2 w-full cursor-pointer accent-accent"
-                        min={retrievedDocumentsMin}
-                        max={retrievedDocumentsMax}
-                        step={1}
-                        type="range"
-                        value={maxRetrievedDocuments}
-                        onChange={(event) =>
-                          setMaxRetrievedDocuments(Number(event.target.value))
-                        }
+                        className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-subtle"
+                        placeholder="Filter documents"
+                        value={documentFilter}
+                        onChange={(event) => setDocumentFilter(event.target.value)}
                       />
-                      <div className="mt-1 flex justify-between text-[11px] text-subtle">
-                        <span>{retrievedDocumentsMin}</span>
-                        <span>{retrievedDocumentsMax}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-3 rounded-control bg-surface-muted px-3 py-2 text-xs text-muted">
-                      Selected documents are read directly.
-                    </div>
-                  )}
-                </div>
+                    </label>
 
-                <div className="max-h-[calc(100vh-280px)] overflow-y-auto p-2">
-                  {indexedDocuments.length === 0 ? (
-                    <div className="px-2 py-8 text-center">
-                      <FileText className="mx-auto size-6 text-subtle" />
-                      <p className="mt-2 text-[13px] font-medium text-ink">
-                        No indexed documents
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-muted">
-                        Import and index TXT files before chatting.
-                      </p>
-                    </div>
-                  ) : filteredIndexedDocuments.length === 0 ? (
-                    <div className="px-2 py-8 text-center text-[13px] text-muted">
-                      No documents match the filter.
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      {filteredIndexedDocuments.map((document) => (
-                        <label
-                          key={document.id}
-                          className="flex cursor-pointer items-start gap-3 rounded-control px-2 py-2 transition hover:bg-surface-muted"
-                        >
-                          <input
-                            className="sr-only"
-                            checked={selectedDocumentSet.has(document.id)}
-                            type="checkbox"
-                            onChange={() => toggleDocument(document.id)}
-                          />
-                          <span
-                            className={cx(
-                              "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[4px] border",
-                              selectedDocumentSet.has(document.id)
-                                ? "border-accent bg-accent text-white"
-                                : "border-line-strong bg-surface",
-                            )}
+                    <button
+                      className="mt-3 flex h-9 w-full items-center gap-3 rounded-control px-2 text-left text-[13px] transition hover:bg-surface-muted"
+                      type="button"
+                      onClick={() => setSelectedDocumentIds([])}
+                    >
+                      <span
+                        className={cx(
+                          "flex size-4 shrink-0 items-center justify-center rounded-[4px] border",
+                          selectedDocumentIds.length === 0
+                            ? "border-accent bg-accent text-white"
+                            : "border-line-strong bg-surface",
+                        )}
+                      >
+                        {selectedDocumentIds.length === 0 && <Check className="size-3" />}
+                      </span>
+                      <span className="min-w-0 flex-1 font-medium text-ink">All Documents</span>
+                    </button>
+
+                    {selectedDocumentIds.length === 0 ? (
+                      <div className="mt-3 rounded-control bg-surface-muted p-3">
+                        <div className="flex items-center justify-between gap-3 text-xs">
+                          <span className="text-muted">Retrieved documents</span>
+                          <span className="font-medium text-ink">
+                            {plural(maxRetrievedDocuments, "document")}
+                          </span>
+                        </div>
+                        <input
+                          aria-label="Retrieved documents"
+                          className="mt-3 h-2 w-full cursor-pointer accent-accent"
+                          min={retrievedDocumentsMin}
+                          max={retrievedDocumentsMax}
+                          step={1}
+                          type="range"
+                          value={maxRetrievedDocuments}
+                          onChange={(event) =>
+                            setMaxRetrievedDocuments(Number(event.target.value))
+                          }
+                        />
+                        <div className="mt-1 flex justify-between text-[11px] text-subtle">
+                          <span>{retrievedDocumentsMin}</span>
+                          <span>{retrievedDocumentsMax}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 rounded-control bg-surface-muted px-3 py-2 text-xs text-muted">
+                        Selected documents are read directly.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="max-h-[calc(100vh-280px)] overflow-y-auto p-2">
+                    {indexedDocuments.length === 0 ? (
+                      <div className="px-2 py-8 text-center">
+                        <FileText className="mx-auto size-6 text-subtle" />
+                        <p className="mt-2 text-[13px] font-medium text-ink">
+                          No indexed documents
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-muted">
+                          Import and index TXT files before chatting.
+                        </p>
+                      </div>
+                    ) : filteredIndexedDocuments.length === 0 ? (
+                      <div className="px-2 py-8 text-center text-[13px] text-muted">
+                        No documents match the filter.
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {filteredIndexedDocuments.map((document) => (
+                          <label
+                            key={document.id}
+                            className="flex cursor-pointer items-start gap-3 rounded-control px-2 py-2 transition hover:bg-surface-muted"
                           >
-                            {selectedDocumentSet.has(document.id) && (
-                              <Check className="size-3" />
-                            )}
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block truncate text-[13px] font-medium text-ink">
-                              {document.name}
+                            <input
+                              className="sr-only"
+                              checked={selectedDocumentSet.has(document.id)}
+                              type="checkbox"
+                              onChange={() => toggleDocument(document.id)}
+                            />
+                            <span
+                              className={cx(
+                                "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[4px] border",
+                                selectedDocumentSet.has(document.id)
+                                  ? "border-accent bg-accent text-white"
+                                  : "border-line-strong bg-surface",
+                              )}
+                            >
+                              {selectedDocumentSet.has(document.id) && (
+                                <Check className="size-3" />
+                              )}
                             </span>
-                            <span className="mt-0.5 block text-xs text-muted">
-                              Indexed - {document.size}
+                            <span className="min-w-0">
+                              <span className="block truncate text-[13px] font-medium text-ink">
+                                {document.name}
+                              </span>
+                              <span className="mt-0.5 block text-xs text-muted">
+                                Indexed - {document.size}
+                              </span>
                             </span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </aside>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </aside>
+              )}
 
               <section className="flex min-h-[calc(100vh-96px)] min-w-0 flex-col overflow-hidden rounded-panel border border-line bg-surface shadow-panel">
                 <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
-                  <div className="min-w-0">
-                    <h2 className="truncate text-[15px] font-semibold text-ink">
-                      Knowledge Chat
-                    </h2>
-                    <p className="mt-0.5 truncate text-xs text-muted">
-                      {selectedDocumentIds.length > 0
-                        ? "Answering from selected full documents"
-                        : `Answering from top ${maxRetrievedDocuments} retrieved full documents`}
-                    </p>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <button
+                      className="flex size-8 shrink-0 items-center justify-center rounded-control border border-line bg-surface text-subtle shadow-sm transition hover:border-line-strong hover:bg-surface-muted hover:text-ink"
+                      type="button"
+                      aria-label={
+                        isContextCollapsed
+                          ? "Show query context"
+                          : "Collapse query context"
+                      }
+                      onClick={() => setIsContextCollapsed((current) => !current)}
+                    >
+                      {isContextCollapsed ? (
+                        <PanelLeftOpen className="size-4" />
+                      ) : (
+                        <PanelLeftClose className="size-4" />
+                      )}
+                    </button>
+                    <div className="min-w-0">
+                      <h2 className="truncate text-[15px] font-semibold text-ink">
+                        Knowledge Chat
+                      </h2>
+                      <p className="mt-0.5 truncate text-xs text-muted">
+                        {selectedDocumentIds.length > 0
+                          ? "Answering from selected full documents"
+                          : `Answering from top ${maxRetrievedDocuments} retrieved full documents`}
+                      </p>
+                    </div>
                   </div>
                   <StatusPill tone={selectedDocumentIds.length > 0 ? "accent" : "neutral"}>
                     {selectedDocumentIds.length > 0 ? "Selected Scope" : "Hybrid Retrieval"}
