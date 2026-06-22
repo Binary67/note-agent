@@ -14,7 +14,7 @@ import { normalizeFolderName } from "@/lib/folders";
 import {
   createId,
   createInitialMessages,
-  isTextFile,
+  isSupportedSourceFile,
   parseJson,
   plural,
 } from "@/lib/utils";
@@ -40,7 +40,7 @@ export function useKnowledgeBase() {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
-  const [notice, setNotice] = useState("Drop files here or browse from your computer.");
+  const [notice, setNotice] = useState("Drop text or audio files here.");
   const [documentFilter, setDocumentFilter] = useState("");
   const [isContextCollapsed, setIsContextCollapsed] = useState(false);
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
@@ -268,10 +268,10 @@ export function useKnowledgeBase() {
     }
 
     const files = Array.from(fileList);
-    const textFiles = files.filter(isTextFile);
+    const sourceFiles = files.filter(isSupportedSourceFile);
 
-    if (textFiles.length === 0) {
-      setNotice("Only .txt files are supported in this first version.");
+    if (sourceFiles.length === 0) {
+      setNotice("Only .txt and supported audio files are supported.");
       return;
     }
 
@@ -279,7 +279,7 @@ export function useKnowledgeBase() {
 
     try {
       const formData = new FormData();
-      for (const file of textFiles) {
+      for (const file of sourceFiles) {
         formData.append("files", file);
       }
 
@@ -288,7 +288,7 @@ export function useKnowledgeBase() {
       );
       setUploads((current) => [...data.documents, ...current]);
       setFolders(data.folders);
-      setNotice(`${plural(textFiles.length, "file")} added to the ingestion queue.`);
+      setNotice(`${plural(sourceFiles.length, "file")} added to the ingestion queue.`);
       setActiveView("ingestion");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Upload failed.");

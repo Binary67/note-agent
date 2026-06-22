@@ -10,7 +10,13 @@ import {
 } from "@/app/components/ui";
 import { FolderInlineInput } from "@/app/components/folder-inline-input";
 import { SummaryChip } from "@/app/components/summary-chip";
-import { plural, splitName, statusTone, typeLabel } from "@/lib/utils";
+import {
+  plural,
+  splitName,
+  statusTone,
+  SUPPORTED_SOURCE_ACCEPT,
+  typeLabel,
+} from "@/lib/utils";
 import type { FolderRecord, UploadItem } from "@/app/types";
 
 export type IngestionViewProps = {
@@ -112,7 +118,7 @@ export function IngestionView({
             ref={fileInputRef}
             className="sr-only"
             type="file"
-            accept=".txt,text/plain"
+            accept={SUPPORTED_SOURCE_ACCEPT}
             multiple
             onChange={onFileInputChange}
           />

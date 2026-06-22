@@ -1,8 +1,68 @@
 import type { UploadStatus } from "@/app/types";
 import type { ChatMessage } from "@/app/types";
 
-export function isTextFile(file: File) {
-  return file.type === "text/plain" || file.name.toLowerCase().endsWith(".txt");
+const AUDIO_EXTENSIONS = new Set([
+  ".flac",
+  ".m4a",
+  ".mp3",
+  ".mp4",
+  ".mpeg",
+  ".mpga",
+  ".ogg",
+  ".wav",
+  ".webm",
+]);
+
+const AUDIO_MIME_TYPES = new Set([
+  "audio/flac",
+  "audio/m4a",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/mpga",
+  "audio/ogg",
+  "audio/wav",
+  "audio/webm",
+  "audio/x-m4a",
+  "audio/x-wav",
+  "video/mp4",
+  "video/webm",
+]);
+
+export const SUPPORTED_SOURCE_ACCEPT = [
+  ".txt",
+  "text/plain",
+  ".flac",
+  ".m4a",
+  ".mp3",
+  ".mp4",
+  ".mpeg",
+  ".mpga",
+  ".ogg",
+  ".wav",
+  ".webm",
+  "audio/*",
+].join(",");
+
+export type SourceFileKind = "text" | "audio";
+
+export function getSourceFileKind(file: Pick<File, "name" | "type">): SourceFileKind | null {
+  const name = file.name.toLowerCase();
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+  const type = file.type.toLowerCase();
+
+  if (type === "text/plain" || ext === ".txt") {
+    return "text";
+  }
+
+  if (AUDIO_EXTENSIONS.has(ext) || AUDIO_MIME_TYPES.has(type) || type.startsWith("audio/")) {
+    return "audio";
+  }
+
+  return null;
+}
+
+export function isSupportedSourceFile(file: File) {
+  return getSourceFileKind(file) !== null;
 }
 
 export async function parseJson<T>(response: Response): Promise<T> {
@@ -67,5 +127,6 @@ export function splitName(name: string): { stem: string; ext: string } {
 
 export function typeLabel(ext: string): string {
   if (ext === ".txt") return "Text document";
+  if (AUDIO_EXTENSIONS.has(ext.toLowerCase())) return "Audio transcript";
   return "Document";
 }

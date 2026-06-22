@@ -10,6 +10,13 @@ export type Config = {
     chatDeployment: string;
     embeddingDeployment: string;
   };
+  transcription: {
+    apiKey: string;
+    endpoint: string;
+    deployment: string;
+    apiVersion: string;
+    maxBytes: number;
+  };
   ingestion: {
     chunkSize: number;
     chunkOverlap: number;
@@ -35,9 +42,27 @@ export function getConfig(): Config {
   const chatDeployment = process.env.AZURE_OPENAI_CHAT_DEPLOYMENT ?? "";
   const embeddingDeployment =
     process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT ?? "";
+  const transcriptionApiKey =
+    process.env.AZURE_OPENAI_TRANSCRIPTION_API_KEY ?? "";
+  const transcriptionEndpoint =
+    process.env.AZURE_OPENAI_TRANSCRIPTION_ENDPOINT ?? "";
+  const transcriptionDeployment =
+    process.env.AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT ?? "";
+  const transcriptionApiVersion =
+    process.env.AZURE_OPENAI_TRANSCRIPTION_API_VERSION ?? "";
 
   return {
     azure: { apiKey, endpoint, chatDeployment, embeddingDeployment },
+    transcription: {
+      apiKey: transcriptionApiKey,
+      endpoint: transcriptionEndpoint,
+      deployment: transcriptionDeployment,
+      apiVersion: transcriptionApiVersion,
+      maxBytes: readInt(
+        "AZURE_OPENAI_TRANSCRIPTION_MAX_BYTES",
+        24 * 1024 * 1024,
+      ),
+    },
     ingestion: {
       chunkSize: readInt("CHUNK_SIZE", 800),
       chunkOverlap: readInt("CHUNK_OVERLAP", 120),
