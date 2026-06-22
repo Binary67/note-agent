@@ -2,27 +2,32 @@
 
 import {
   Bell,
-  BookOpen,
   Bot,
   ChartNoAxesColumn,
   CheckCircle2,
-  ChevronRight,
   CircleHelp,
   Cloud,
   CloudUpload,
   FileText,
   FolderOpen,
   MessageSquareText,
-  MoreVertical,
   Plus,
   RefreshCcw,
   Search,
   Settings,
   Upload,
   X,
-  Zap,
 } from "lucide-react";
 import { type ChangeEvent, type DragEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  cx,
+  InspectorPanel,
+  PrimaryButton,
+  SegmentedControl,
+  SidebarItem,
+  StatusPill,
+  ToolbarButton,
+} from "@/app/components/ui";
 
 type UploadStatus = "Ready" | "Ingesting" | "Indexed" | "Error";
 
@@ -59,20 +64,24 @@ async function parseJson<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function statusClasses(status: UploadStatus) {
+function plural(value: number, noun: string) {
+  return `${value} ${noun}${value === 1 ? "" : "s"}`;
+}
+
+function statusTone(status: UploadStatus): "neutral" | "accent" | "success" | "danger" {
   if (status === "Indexed") {
-    return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+    return "success";
   }
 
   if (status === "Ingesting") {
-    return "bg-blue-50 text-[#0066cc] ring-blue-200";
+    return "accent";
   }
 
   if (status === "Error") {
-    return "bg-red-50 text-red-700 ring-red-200";
+    return "danger";
   }
 
-  return "bg-zinc-100 text-zinc-700 ring-zinc-200";
+  return "neutral";
 }
 
 export default function Home() {
@@ -119,9 +128,85 @@ export default function Home() {
       indexed: uploads.filter((upload) => upload.status === "Indexed").length,
       ingesting: uploads.filter((upload) => upload.status === "Ingesting").length,
       ready: uploads.filter((upload) => upload.status === "Ready").length,
+      errors: uploads.filter((upload) => upload.status === "Error").length,
     }),
     [uploads],
   );
+
+  const readiness = useMemo(() => {
+    if (isIngesting || stats.ingesting > 0) {
+      return {
+        label: "Indexing",
+        title: "Indexing documents",
+        description: "Parsing, chunking, embedding, and saving local index files.",
+        tone: "accent" as const,
+      };
+    }
+
+    if (stats.ready > 0) {
+      return {
+        label: "Ready",
+        title: `${stats.ready} ready to index`,
+        description: "Start indexing to make the staged TXT files searchable.",
+        tone: "accent" as const,
+      };
+    }
+
+    if (stats.errors > 0) {
+      return {
+        label: "Review",
+        title: `${stats.errors} indexing issue${stats.errors === 1 ? "" : "s"}`,
+        description: "Remove failed documents or upload a clean TXT file before retrying.",
+        tone: "danger" as const,
+      };
+    }
+
+    if (stats.indexed > 0) {
+      return {
+        label: "Indexed",
+        title: "All files indexed",
+        description: "Indexed documents are ready for the retrieval layer.",
+        tone: "success" as const,
+      };
+    }
+
+    return {
+      label: "Idle",
+      title: "No documents staged",
+      description: "Import TXT files to prepare the knowledge base.",
+      tone: "neutral" as const,
+    };
+  }, [isIngesting, stats]);
+
+  const indexActive = isIngesting || stats.ingesting > 0;
+  const indexComplete = stats.indexed > 0;
+  const indexSteps = [
+    {
+      label: "Uploaded",
+      detail: stats.total > 0 ? plural(stats.total, "file") : "Waiting for files",
+      state: stats.total > 0 ? "complete" : "waiting",
+    },
+    {
+      label: "Parsed",
+      detail: indexComplete ? "Text extracted" : indexActive ? "In progress" : "Waiting",
+      state: indexComplete ? "complete" : indexActive ? "active" : "waiting",
+    },
+    {
+      label: "Chunked",
+      detail: indexComplete ? "Segments prepared" : indexActive ? "In progress" : "Waiting",
+      state: indexComplete ? "complete" : indexActive ? "active" : "waiting",
+    },
+    {
+      label: "Embedded",
+      detail: indexComplete ? "Vectors saved" : indexActive ? "In progress" : "Waiting",
+      state: indexComplete ? "complete" : indexActive ? "active" : "waiting",
+    },
+    {
+      label: "Indexed",
+      detail: indexComplete ? plural(stats.indexed, "searchable file") : "Waiting",
+      state: indexComplete ? "complete" : "waiting",
+    },
+  ] as const;
 
   async function handleFiles(fileList: FileList | null) {
     if (!fileList) {
@@ -203,246 +288,191 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f]">
+    <main className="min-h-screen bg-canvas text-ink">
       <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white/80 px-5 py-6 backdrop-blur lg:flex lg:flex-col">
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-[#0066cc] text-sm font-semibold text-white">
+        <aside className="hidden w-[248px] shrink-0 border-r border-line bg-sidebar px-4 py-5 lg:flex lg:flex-col">
+          <div className="flex items-center gap-3 px-1">
+            <div className="flex size-8 items-center justify-center rounded-control bg-accent text-sm font-semibold text-white">
               R
             </div>
-            <div>
-              <p className="text-lg font-semibold leading-5 text-[#0066cc]">RAG Engine</p>
-              <p className="text-xs text-slate-500">Personal AI</p>
+            <div className="min-w-0">
+              <p className="truncate text-[15px] font-semibold leading-5 text-ink">RAG Engine</p>
+              <p className="text-xs text-muted">Personal AI</p>
             </div>
           </div>
 
-          <button
-            className="mt-7 flex h-10 items-center justify-center gap-2 rounded-lg bg-[#0066cc] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005bb8]"
-            type="button"
+          <PrimaryButton
+            className="mt-6 w-full"
             onClick={() => fileInputRef.current?.click()}
           >
             <Plus className="size-4" />
-            Upload TXT
-          </button>
+            Import TXT
+          </PrimaryButton>
 
-          <nav className="mt-6 space-y-1">
+          <nav className="mt-5 space-y-1">
             {navigationItems.map((item) => (
-              <button
+              <SidebarItem
                 key={item.label}
-                className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm transition ${
-                  item.active
-                    ? "bg-[#f5f5f7] font-medium text-[#0066cc] shadow-[inset_3px_0_0_#0066cc]"
-                    : "text-slate-600 hover:bg-[#f5f5f7]"
-                }`}
-                type="button"
-              >
-                <item.icon className="size-4" />
-                {item.label}
-              </button>
+                active={item.active}
+                icon={item.icon}
+                label={item.label}
+              />
             ))}
           </nav>
 
-          <div className="mt-auto border-t border-slate-200 pt-4">
-            <button
-              className="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-sm text-slate-600 transition hover:bg-[#f5f5f7]"
-              type="button"
-            >
-              <Settings className="size-4" />
-              Settings
-            </button>
-            <button
-              className="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-sm text-slate-600 transition hover:bg-[#f5f5f7]"
-              type="button"
-            >
-              <CircleHelp className="size-4" />
-              Help
-            </button>
+          <div className="mt-auto border-t border-line pt-3">
+            <SidebarItem icon={Settings} label="Settings" />
+            <SidebarItem icon={CircleHelp} label="Help" />
           </div>
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-slate-200 bg-white/90 px-5 backdrop-blur md:px-7">
-            <div className="flex min-w-0 items-center gap-5">
-              <div className="lg:hidden">
-                <div className="flex size-9 items-center justify-center rounded-lg bg-[#0066cc] text-sm font-semibold text-white">
-                  R
-                </div>
+          <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-line bg-toolbar px-4 backdrop-blur-xl md:px-6">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="flex size-8 items-center justify-center rounded-control bg-accent text-sm font-semibold text-white lg:hidden">
+                R
               </div>
-              <div>
-                <h1 className="truncate text-xl font-semibold text-[#0066cc]">
+              <div className="min-w-0">
+                <h1 className="truncate text-[17px] font-semibold text-ink">
                   Knowledge Platform
                 </h1>
               </div>
-              <nav className="hidden items-center gap-2 md:flex">
-                {topNavItems.map((item) => (
-                  <button
-                    key={item}
-                    className={`relative h-14 px-4 text-sm font-medium ${
-                      item === "Ingestion" ? "text-[#0066cc]" : "text-slate-600"
-                    }`}
-                    type="button"
-                  >
-                    {item}
-                    {item === "Ingestion" ? (
-                      <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-[#0066cc]" />
-                    ) : null}
-                  </button>
-                ))}
-              </nav>
+              <SegmentedControl items={topNavItems} activeItem="Ingestion" />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <ToolbarButton icon={Search} label="Search" />
+              <ToolbarButton icon={Bell} label="Notifications" />
+              <ToolbarButton icon={Cloud} label="Cloud sync" />
               <button
-                className="hidden size-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-[#f5f5f7] sm:flex"
-                type="button"
-                aria-label="Search"
-              >
-                <Search className="size-[18px]" />
-              </button>
-              <button
-                className="hidden size-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-[#f5f5f7] sm:flex"
-                type="button"
-                aria-label="Notifications"
-              >
-                <Bell className="size-[18px]" />
-              </button>
-              <button
-                className="hidden size-9 items-center justify-center rounded-lg text-slate-600 transition hover:bg-[#f5f5f7] sm:flex"
-                type="button"
-                aria-label="Cloud sync"
-              >
-                <Cloud className="size-[18px]" />
-              </button>
-              <button
-                className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-[#1d1d1f] shadow-sm transition hover:border-slate-300"
+                className="hidden h-8 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-ink shadow-sm transition hover:border-line-strong sm:flex"
                 type="button"
               >
-                <Plus className="size-4" />
+                <Plus className="size-3.5" />
                 New Chat
               </button>
-              <div className="flex size-9 items-center justify-center rounded-full bg-[#f5f5f7] text-sm font-semibold text-[#0066cc] ring-1 ring-slate-200">
+              <div className="ml-1 flex size-8 items-center justify-center rounded-full bg-surface-muted text-[13px] font-semibold text-accent ring-1 ring-line">
                 F
               </div>
             </div>
           </header>
 
-          <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-5 py-6 md:px-7 lg:py-7">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div>
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#0066cc] ring-1 ring-blue-100">
-                  <Zap className="size-3.5" />
-                  Ingestion
-                </div>
-                <h2 className="text-2xl font-semibold tracking-tight text-[#1d1d1f] md:text-[28px]">
-                  Document Ingestion
-                </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-5 text-slate-600">
-                  Upload text files to prepare a knowledge base that an agent can crawl later.
-                  Supported format for this first pass: TXT.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-slate-200 bg-white p-1.5 shadow-sm">
-                <Metric label="Total" value={stats.total} />
-                <Metric label="Indexed" value={stats.indexed} />
-                <Metric label="Ready" value={stats.ready} />
-              </div>
-            </div>
-
-            <label
-              className={`flex min-h-[220px] cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed bg-white px-5 text-center shadow-sm transition ${
-                isDragging
-                  ? "border-[#0066cc] ring-4 ring-blue-100"
-                  : "border-[#0066cc] hover:bg-blue-50/30"
-              }`}
-              onDragEnter={(event) => {
-                event.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragOver={(event) => event.preventDefault()}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-            >
-              <input
-                ref={fileInputRef}
-                className="sr-only"
-                type="file"
-                accept=".txt,text/plain"
-                multiple
-                onChange={handleInputChange}
-              />
-              <span className="flex size-14 items-center justify-center rounded-full bg-blue-100 text-[#0066cc]">
-                <CloudUpload className="size-7" />
-              </span>
-              <span className="mt-4 text-xl font-semibold tracking-tight text-[#1d1d1f]">
-                Drag and drop TXT files here
-              </span>
-              <span className="mt-2 text-sm text-slate-600">
-                {isUploading ? "Uploading..." : notice}
-              </span>
-              <span className="mt-5 inline-flex h-10 items-center gap-2 rounded-lg bg-[#0066cc] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005bb8]">
-                <Upload className="size-4" />
-                Select Files
-              </span>
-            </label>
-
-            <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
-              <section className="min-w-0">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-xl font-semibold tracking-tight text-[#1d1d1f]">
-                    Recent Uploads
-                  </h3>
-                  <button
-                    className="flex items-center gap-1 text-sm font-semibold text-[#0066cc] transition hover:text-[#005bb8]"
-                    type="button"
-                  >
-                    View All
-                    <ChevronRight className="size-4" />
-                  </button>
+          <div className="mx-auto grid w-full max-w-7xl flex-1 gap-6 px-5 py-5 md:px-7 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="min-w-0 space-y-5">
+              <section className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <p className="text-[13px] font-medium text-muted">Knowledge Base</p>
+                  <h2 className="mt-1 text-[28px] font-semibold tracking-tight text-ink">
+                    Ingestion
+                  </h2>
+                  <p className="mt-1 max-w-2xl text-[13px] leading-5 text-muted">
+                    Import TXT documents, then index them for local retrieval.
+                  </p>
                 </div>
 
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                  <div className="grid grid-cols-[minmax(0,1fr)_120px_40px] border-b border-slate-200 bg-[#f5f5f7] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 sm:grid-cols-[minmax(0,1fr)_110px_130px_40px] md:grid-cols-[minmax(0,1fr)_110px_130px_110px_40px]">
-                    <span>File Name</span>
-                    <span className="hidden sm:block">Size</span>
-                    <span>Status</span>
-                    <span className="hidden md:block">Date</span>
-                    <span />
+                <div className="flex flex-wrap gap-2 text-[13px] text-muted">
+                  <SummaryChip label="Total" value={stats.total} />
+                  <SummaryChip label="Indexed" value={stats.indexed} />
+                  <SummaryChip label="Ready" value={stats.ready} />
+                </div>
+              </section>
+
+              <label
+                className={cx(
+                  "group flex cursor-pointer flex-col gap-4 rounded-panel border bg-surface p-4 shadow-panel transition sm:flex-row sm:items-center sm:justify-between",
+                  isDragging
+                    ? "border-dashed border-accent bg-accent-soft ring-4 ring-accent-soft"
+                    : "border-line hover:border-line-strong",
+                )}
+                onDragEnter={(event) => {
+                  event.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragOver={(event) => event.preventDefault()}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+              >
+                <input
+                  ref={fileInputRef}
+                  className="sr-only"
+                  type="file"
+                  accept=".txt,text/plain"
+                  multiple
+                  onChange={handleInputChange}
+                />
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
+                    <CloudUpload className="size-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[15px] font-semibold text-ink">
+                      Drop TXT files here
+                    </span>
+                    <span className="mt-0.5 block truncate text-[13px] text-muted">
+                      {isUploading ? "Uploading..." : notice}
+                    </span>
+                  </span>
+                </span>
+                <span className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-control bg-accent px-3.5 text-[13px] font-semibold text-white transition group-hover:bg-accent-hover">
+                  <Upload className="size-4" />
+                  Select Files
+                </span>
+              </label>
+
+              <section className="overflow-hidden rounded-panel border border-line bg-surface shadow-panel">
+                <div className="flex h-12 items-center justify-between border-b border-line px-4">
+                  <div>
+                    <h3 className="text-[15px] font-semibold text-ink">Uploads</h3>
+                    <p className="text-xs text-muted">{plural(uploads.length, "file")}</p>
                   </div>
+                </div>
 
-                  <div className="divide-y divide-slate-200">
+                <div className="grid grid-cols-[minmax(0,1fr)_104px_32px] border-b border-line bg-surface-muted px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle sm:grid-cols-[minmax(0,1fr)_80px_112px_32px] md:grid-cols-[minmax(0,1fr)_80px_112px_92px_32px]">
+                  <span>File</span>
+                  <span className="hidden sm:block">Size</span>
+                  <span>Status</span>
+                  <span className="hidden md:block">Date</span>
+                  <span />
+                </div>
+
+                {uploads.length === 0 ? (
+                  <div className="px-4 py-10 text-center">
+                    <FileText className="mx-auto size-7 text-subtle" />
+                    <p className="mt-3 text-sm font-medium text-ink">No uploads yet</p>
+                    <p className="mt-1 text-[13px] text-muted">
+                      Import TXT files to start building the local index.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-line">
                     {uploads.map((upload) => (
                       <div
                         key={upload.id}
-                        className="grid grid-cols-[minmax(0,1fr)_120px_40px] items-center px-4 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_110px_130px_40px] md:grid-cols-[minmax(0,1fr)_110px_130px_110px_40px]"
+                        className="grid min-h-14 grid-cols-[minmax(0,1fr)_104px_32px] items-center px-4 py-2.5 text-[13px] sm:grid-cols-[minmax(0,1fr)_80px_112px_32px] md:grid-cols-[minmax(0,1fr)_80px_112px_92px_32px]"
                       >
                         <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-surface-muted text-muted">
                             <FileText className="size-4" />
                           </span>
                           <div className="min-w-0">
-                            <p className="truncate font-medium text-[#1d1d1f]">{upload.name}</p>
-                            <p className="mt-0.5 text-xs text-slate-500 sm:hidden">{upload.size}</p>
+                            <p className="truncate font-medium text-ink">{upload.name}</p>
+                            <p className="mt-0.5 text-xs text-muted sm:hidden">{upload.size}</p>
                           </div>
                         </div>
-                        <span className="hidden text-slate-600 sm:block">{upload.size}</span>
+                        <span className="hidden text-muted sm:block">{upload.size}</span>
                         <span>
-                          <span
-                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${statusClasses(
-                              upload.status,
-                            )}`}
-                          >
+                          <StatusPill tone={statusTone(upload.status)}>
                             {upload.status === "Indexed" ? (
                               <CheckCircle2 className="size-3.5" />
                             ) : (
                               <span className="size-1.5 rounded-full bg-current" />
                             )}
                             {upload.status}
-                          </span>
+                          </StatusPill>
                         </span>
-                        <span className="hidden text-slate-600 md:block">{upload.uploadedAt}</span>
+                        <span className="hidden text-muted md:block">{upload.uploadedAt}</span>
                         <button
-                          className="flex size-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-[#f5f5f7] hover:text-[#1d1d1f]"
+                          className="flex size-8 items-center justify-center rounded-control text-subtle transition hover:bg-surface-muted hover:text-ink"
                           type="button"
                           aria-label={`Remove ${upload.name}`}
                           onClick={() => removeUpload(upload.id)}
@@ -452,49 +482,91 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
+                )}
+              </section>
+            </div>
+
+            <InspectorPanel>
+              <section className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
+                      Index Status
+                    </p>
+                    <h3 className="mt-1 text-base font-semibold text-ink">{readiness.title}</h3>
+                  </div>
+                  <StatusPill tone={readiness.tone}>{readiness.label}</StatusPill>
                 </div>
+
+                <p className="mt-2 text-[13px] leading-5 text-muted">{readiness.description}</p>
+
+                <div className="mt-4 space-y-3">
+                  {indexSteps.map((step) => (
+                    <div key={step.label} className="flex items-start gap-3">
+                      <span
+                        className={cx(
+                          "mt-1.5 size-2.5 rounded-full ring-4",
+                          step.state === "complete" && "bg-success ring-success-soft",
+                          step.state === "active" && "bg-accent ring-accent-soft",
+                          step.state === "waiting" && "bg-line-strong ring-surface-muted",
+                        )}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium text-ink">{step.label}</p>
+                        <p className="text-xs text-muted">{step.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <PrimaryButton
+                  className="mt-4 w-full"
+                  disabled={stats.ready === 0 || isIngesting}
+                  onClick={() => void startIngestion()}
+                >
+                  {isIngesting
+                    ? "Indexing..."
+                    : stats.ready > 0
+                      ? "Start Indexing"
+                      : stats.indexed > 0
+                        ? "Indexed"
+                        : "Start Indexing"}
+                  <RefreshCcw className={cx("size-4", isIngesting && "animate-spin")} />
+                </PrimaryButton>
               </section>
 
-              <aside className="space-y-4">
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-[#1d1d1f]">Agent Crawl Readiness</h3>
-                    <BookOpen className="size-[18px] text-[#0066cc]" />
+              <section className="border-t border-line p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
+                      Retrieval Preview
+                    </p>
+                    <h3 className="mt-1 text-base font-semibold text-ink">Ask indexed documents</h3>
                   </div>
-                  <p className="mt-2 text-sm leading-5 text-slate-600">
-                    TXT uploads are staged locally. Backend parsing, chunking, indexing, and agent
-                    retrieval can be connected next.
-                  </p>
+                  <Bot className="size-[18px] text-accent" />
+                </div>
+
+                <div className="mt-3 flex items-center gap-2 rounded-panel bg-surface-muted p-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-control bg-surface px-3 py-2 text-[13px] text-subtle ring-1 ring-line">
+                    <Search className="size-4 shrink-0" />
+                    <span className="truncate">Ask indexed documents...</span>
+                  </div>
                   <button
-                    className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#1d1d1f] px-4 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="h-8 rounded-control bg-surface-pressed px-3 text-[13px] font-medium text-subtle"
                     type="button"
-                    disabled={stats.ready === 0 || isIngesting}
-                    onClick={() => void startIngestion()}
+                    disabled
                   >
-                    {isIngesting ? "Ingesting..." : "Start Ingestion"}
-                    <RefreshCcw className={`size-4 ${isIngesting ? "animate-spin" : ""}`} />
+                    Ask
                   </button>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-[#1d1d1f]">Next Agent Query</h3>
-                    <MoreVertical className="size-[18px] text-slate-500" />
-                  </div>
-                  <div className="mt-4 rounded-lg bg-[#f5f5f7] p-3">
-                    <div className="flex items-center gap-3">
-                      <span className="flex size-8 items-center justify-center rounded-lg bg-white text-[#0066cc] ring-1 ring-slate-200">
-                        <Bot className="size-4" />
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold text-[#1d1d1f]">Ask from knowledge</p>
-                        <p className="text-xs text-slate-500">Available after indexing</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </aside>
-            </div>
+                <p className="mt-2 text-xs leading-5 text-muted">
+                  {stats.indexed > 0
+                    ? "Indexed content is ready for a retrieval endpoint."
+                    : "Available after at least one document is indexed."}
+                </p>
+              </section>
+            </InspectorPanel>
           </div>
         </section>
       </div>
@@ -502,13 +574,11 @@ export default function Home() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function SummaryChip({ label, value }: { label: string; value: number }) {
   return (
-    <div className="min-w-[72px] rounded-lg px-3 py-1.5 text-center">
-      <p className="text-lg font-semibold leading-5 text-[#1d1d1f]">{value}</p>
-      <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">
-        {label}
-      </p>
-    </div>
+    <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-surface px-3 text-muted ring-1 ring-line">
+      <span className="font-semibold text-ink">{value}</span>
+      {label}
+    </span>
   );
 }
