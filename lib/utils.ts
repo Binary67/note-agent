@@ -52,13 +52,7 @@ export function createId(prefix: string) {
 }
 
 export function createInitialMessages(): ChatMessage[] {
-  return [
-    {
-      id: createId("assistant"),
-      role: "assistant",
-      content: "Ask a question about your indexed documents.",
-    },
-  ];
+  return [];
 }
 
 export function splitName(name: string): { stem: string; ext: string } {

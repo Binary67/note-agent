@@ -9,6 +9,7 @@ import { useKnowledgeBase } from "@/app/hooks/use-knowledge-base";
 
 export default function Home() {
   const kb = useKnowledgeBase();
+  const pageTitle = kb.activeView === "chat" ? "Chat" : "Knowledge";
 
   return (
     <main className="min-h-screen bg-canvas text-ink">
@@ -23,7 +24,7 @@ export default function Home() {
               </div>
               <div className="min-w-0">
                 <h1 className="truncate text-[17px] font-semibold text-ink">
-                  Knowledge Platform
+                  {pageTitle}
                 </h1>
               </div>
             </div>

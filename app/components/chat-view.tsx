@@ -2,7 +2,7 @@
 
 import { Bot, PanelLeftClose, PanelLeftOpen, Plus, SendHorizontal } from "lucide-react";
 import { type FormEvent, type KeyboardEvent } from "react";
-import { cx, StatusPill } from "@/app/components/ui";
+import { cx } from "@/app/components/ui";
 import { ChatMessageBubble } from "@/app/components/chat-message-bubble";
 import { QueryContextPanel } from "@/app/components/query-context-panel";
 import type { ChatMessage, FolderRecord, UploadItem } from "@/app/types";
@@ -61,14 +61,6 @@ export function ChatView({
     chatInput.trim().length > 0 &&
     !isAnswering &&
     indexedDocuments.length > 0;
-  const chatStatusLabel =
-    hasFoldersSelected && hasDocsSelected
-      ? "Mixed Scope"
-      : hasFoldersSelected
-        ? "Folder Scope"
-        : hasDocsSelected
-          ? "Document Scope"
-          : "Hybrid Retrieval";
 
   function handleChatKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -80,7 +72,7 @@ export function ChatView({
   return (
     <div
       className={cx(
-        "mx-auto grid w-full max-w-7xl flex-1 gap-5 px-5 py-5 md:px-7",
+        "mx-auto grid w-full max-w-7xl flex-1 gap-4 px-5 py-5 md:px-7",
         !isContextCollapsed && "xl:grid-cols-[304px_minmax(0,1fr)]",
       )}
     >
@@ -105,7 +97,7 @@ export function ChatView({
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
           <div className="flex min-w-0 items-center gap-2">
             <button
-              className="flex size-8 shrink-0 items-center justify-center rounded-control border border-line bg-surface text-subtle shadow-sm transition hover:border-line-strong hover:bg-surface-muted hover:text-ink"
+              className="flex size-8 shrink-0 items-center justify-center rounded-control text-subtle transition hover:bg-surface-muted hover:text-ink"
               type="button"
               aria-label={
                 isContextCollapsed
@@ -122,22 +114,13 @@ export function ChatView({
             </button>
             <div className="min-w-0">
               <h2 className="truncate text-[15px] font-semibold text-ink">
-                Knowledge Chat
+                Chat
               </h2>
-              <p className="mt-0.5 truncate text-xs text-muted">
-                {hasFoldersSelected && hasDocsSelected
-                  ? "Retrieving from folders and reading selected documents"
-                  : hasFoldersSelected
-                    ? "Retrieving from selected folders"
-                    : hasDocsSelected
-                      ? "Answering from selected full documents"
-                      : `Answering from top ${maxRetrievedDocuments} retrieved full documents`}
-              </p>
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
-              className="flex h-8 items-center gap-1.5 rounded-control border border-line bg-surface px-2.5 text-[13px] font-medium text-ink shadow-sm transition hover:border-line-strong hover:bg-surface-muted"
+              className="flex h-8 items-center gap-1.5 rounded-control px-2.5 text-[13px] font-medium text-ink transition hover:bg-surface-muted"
               type="button"
               aria-label="New chat"
               onClick={onResetChat}
@@ -145,11 +128,6 @@ export function ChatView({
               <Plus className="size-3.5" />
               <span className="hidden sm:inline">New Chat</span>
             </button>
-            <span className="hidden sm:inline-flex">
-              <StatusPill tone={hasSelection ? "accent" : "neutral"}>
-                {chatStatusLabel}
-              </StatusPill>
-            </span>
           </div>
         </div>
 
@@ -172,14 +150,16 @@ export function ChatView({
         </div>
 
         <form className="shrink-0 border-t border-line p-4" onSubmit={onSubmitChat}>
-          <div className="overflow-hidden rounded-panel border border-line bg-surface shadow-sm focus-within:border-line-strong">
+          <div className="overflow-hidden rounded-panel border border-line bg-surface focus-within:border-line-strong">
             <textarea
               className="block min-h-24 w-full resize-none bg-transparent px-3 py-3 text-[14px] leading-5 text-ink outline-none placeholder:text-subtle"
               disabled={isAnswering || indexedDocuments.length === 0}
               placeholder={
                 indexedDocuments.length === 0
                   ? "Index documents before chatting"
-                  : "Ask a question about your documents..."
+                  : hasSelection
+                    ? "Ask about the selected context..."
+                    : `Ask across ${maxRetrievedDocuments} retrieved documents...`
               }
               value={chatInput}
               onChange={(event) => onChatInputChange(event.target.value)}

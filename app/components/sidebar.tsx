@@ -7,8 +7,8 @@ const navigationItems: Array<{
   icon: LucideIcon;
   view?: ViewKey;
 }> = [
-  { label: "Knowledge Base", icon: FolderOpen, view: "ingestion" },
-  { label: "Chat Interface", icon: MessageSquareText, view: "chat" },
+  { label: "Knowledge", icon: FolderOpen, view: "ingestion" },
+  { label: "Chat", icon: MessageSquareText, view: "chat" },
   { label: "Analytics", icon: ChartNoAxesColumn },
 ];
 
@@ -27,7 +27,6 @@ export function Sidebar({
         </div>
         <div className="min-w-0">
           <p className="truncate text-[15px] font-semibold leading-5 text-ink">RAG Engine</p>
-          <p className="text-xs text-muted">Personal AI</p>
         </div>
       </div>
 

@@ -57,28 +57,17 @@ export function QueryContextPanel({
       .filter(Boolean)
       .join(" + ")
     : "All documents";
-  const activeScopeDescription =
-    hasFoldersSelected && hasDocsSelected
-      ? "Retrieving from folders plus direct documents."
-      : hasFoldersSelected
-        ? "Retrieving from selected folders."
-        : hasDocsSelected
-          ? "Selected documents are read directly."
-          : "Hybrid retrieval chooses full documents.";
 
   return (
     <aside className="overflow-hidden rounded-panel border border-line bg-surface shadow-panel">
-      <div className="border-b border-line p-4">
+      <div className="border-b border-line px-4 py-3.5">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
-            Sources
+            Context
           </p>
           <h2 className="mt-1 truncate text-base font-semibold text-ink">
             {activeScopeTitle}
           </h2>
-          <p className="mt-1 text-[13px] leading-5 text-muted">
-            {activeScopeDescription}
-          </p>
         </div>
       </div>
 
@@ -87,7 +76,7 @@ export function QueryContextPanel({
           <Search className="size-4 text-subtle" />
           <input
             className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-subtle"
-            placeholder="Filter folders & documents"
+            placeholder="Search documents"
             value={documentFilter}
             onChange={(event) => onDocumentFilterChange(event.target.value)}
           />
@@ -96,9 +85,9 @@ export function QueryContextPanel({
         {!pureFullRead ? (
           <div className="mt-3 rounded-control bg-surface-muted p-3">
             <div className="flex items-center justify-between gap-3 text-xs">
-              <span className="text-muted">Retrieved documents</span>
+              <span className="text-muted">Top matches</span>
               <span className="font-medium text-ink">
-                {plural(maxRetrievedDocuments, "document")}
+                {maxRetrievedDocuments}
               </span>
             </div>
             <input
@@ -126,10 +115,10 @@ export function QueryContextPanel({
           <div className="px-2 py-8 text-center">
             <FileText className="mx-auto size-6 text-subtle" />
             <p className="mt-2 text-[13px] font-medium text-ink">
-              No indexed documents
+              No documents indexed
             </p>
             <p className="mt-1 text-xs leading-5 text-muted">
-              Import and index documents before chatting.
+              Index documents first.
             </p>
           </div>
         ) : (
