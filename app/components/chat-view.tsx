@@ -54,9 +54,6 @@ export function ChatView({
   onSubmitChat,
   messagesEndRef,
 }: ChatViewProps) {
-  const hasFoldersSelected = selectedFolderIds.length > 0;
-  const hasDocsSelected = selectedDocumentIds.length > 0;
-  const hasSelection = hasFoldersSelected || hasDocsSelected;
   const chatCanSubmit =
     chatInput.trim().length > 0 &&
     !isAnswering &&
@@ -150,34 +147,27 @@ export function ChatView({
         </div>
 
         <form className="shrink-0 border-t border-line p-4" onSubmit={onSubmitChat}>
-          <div className="overflow-hidden rounded-panel border border-line bg-surface focus-within:border-line-strong">
+          <div className="relative overflow-hidden rounded-panel border border-line bg-surface focus-within:border-line-strong">
             <textarea
-              className="block min-h-24 w-full resize-none bg-transparent px-3 py-3 text-[14px] leading-5 text-ink outline-none placeholder:text-subtle"
+              className="block min-h-20 w-full resize-none bg-transparent px-3 pb-10 pr-12 pt-2.5 text-[14px] leading-5 text-ink outline-none placeholder:text-subtle"
               disabled={isAnswering || indexedDocuments.length === 0}
               placeholder={
                 indexedDocuments.length === 0
                   ? "Index documents before chatting"
-                  : hasSelection
-                    ? "Ask about the selected context..."
-                    : `Ask across ${maxRetrievedDocuments} retrieved documents...`
+                  : "Ask a question. AI responses may be inaccurate; verify important information."
               }
               value={chatInput}
               onChange={(event) => onChatInputChange(event.target.value)}
               onKeyDown={handleChatKeyDown}
             />
-            <div className="flex items-center justify-between gap-3 border-t border-line bg-surface-muted px-3 py-2">
-              <p className="text-xs text-muted">
-                AI responses may be inaccurate. Verify important information.
-              </p>
-              <button
-                className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-pressed disabled:text-subtle"
-                disabled={!chatCanSubmit}
-                type="submit"
-                aria-label="Send question"
-              >
-                <SendHorizontal className="size-4" />
-              </button>
-            </div>
+            <button
+              className="absolute bottom-2 right-2 flex size-8 shrink-0 items-center justify-center rounded-control bg-accent text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-pressed disabled:text-subtle"
+              disabled={!chatCanSubmit}
+              type="submit"
+              aria-label="Send question"
+            >
+              <SendHorizontal className="size-4" />
+            </button>
           </div>
         </form>
       </section>
