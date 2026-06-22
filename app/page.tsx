@@ -2,7 +2,6 @@
 
 import {
   Bell,
-  Bot,
   ChartNoAxesColumn,
   CheckCircle2,
   CircleHelp,
@@ -165,7 +164,7 @@ export default function Home() {
       return {
         label: "Indexed",
         title: "All files indexed",
-        description: "Indexed documents are ready for the retrieval layer.",
+        description: "The local index is up to date for all uploaded files.",
         tone: "success" as const,
       };
     }
@@ -366,7 +365,7 @@ export default function Home() {
                     Ingestion
                   </h2>
                   <p className="mt-1 max-w-2xl text-[13px] leading-5 text-muted">
-                    Import TXT documents, then index them for local retrieval.
+                    Import TXT documents, then prepare the local index.
                   </p>
                 </div>
 
@@ -535,37 +534,6 @@ export default function Home() {
                 </PrimaryButton>
               </section>
 
-              <section className="border-t border-line p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
-                      Retrieval Preview
-                    </p>
-                    <h3 className="mt-1 text-base font-semibold text-ink">Ask indexed documents</h3>
-                  </div>
-                  <Bot className="size-[18px] text-accent" />
-                </div>
-
-                <div className="mt-3 flex items-center gap-2 rounded-panel bg-surface-muted p-2">
-                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-control bg-surface px-3 py-2 text-[13px] text-subtle ring-1 ring-line">
-                    <Search className="size-4 shrink-0" />
-                    <span className="truncate">Ask indexed documents...</span>
-                  </div>
-                  <button
-                    className="h-8 rounded-control bg-surface-pressed px-3 text-[13px] font-medium text-subtle"
-                    type="button"
-                    disabled
-                  >
-                    Ask
-                  </button>
-                </div>
-
-                <p className="mt-2 text-xs leading-5 text-muted">
-                  {stats.indexed > 0
-                    ? "Indexed content is ready for a retrieval endpoint."
-                    : "Available after at least one document is indexed."}
-                </p>
-              </section>
             </InspectorPanel>
           </div>
         </section>
