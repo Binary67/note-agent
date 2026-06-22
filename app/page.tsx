@@ -1,13 +1,11 @@
 "use client";
 
 import {
-  Bell,
   Bot,
   ChartNoAxesColumn,
   Check,
   CheckCircle2,
   CircleHelp,
-  Cloud,
   CloudUpload,
   FileText,
   FolderOpen,
@@ -39,10 +37,8 @@ import {
   cx,
   InspectorPanel,
   PrimaryButton,
-  SegmentedControl,
   SidebarItem,
   StatusPill,
-  ToolbarButton,
 } from "@/app/components/ui";
 
 type UploadStatus = "Ready" | "Ingesting" | "Indexed" | "Error";
@@ -92,7 +88,6 @@ const navigationItems: Array<{
   { label: "Analytics", icon: ChartNoAxesColumn },
 ];
 
-const topNavItems = ["Ingestion", "Chat"];
 const retrievedDocumentsMin = 1;
 const retrievedDocumentsMax = 10;
 
@@ -476,7 +471,6 @@ export default function Home() {
     }
   }
 
-  const activeTopNavItem = activeView === "chat" ? "Chat" : "Ingestion";
   const chatCanSubmit =
     chatInput.trim().length > 0 && !isAnswering && indexedDocuments.length > 0;
 
@@ -494,15 +488,7 @@ export default function Home() {
             </div>
           </div>
 
-          <PrimaryButton
-            className="mt-6 w-full"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Plus className="size-4" />
-            Import TXT
-          </PrimaryButton>
-
-          <nav className="mt-5 space-y-1">
+          <nav className="mt-6 space-y-1">
             {navigationItems.map((item) => (
               <SidebarItem
                 key={item.label}
@@ -531,25 +517,9 @@ export default function Home() {
                   Knowledge Platform
                 </h1>
               </div>
-              <SegmentedControl
-                items={topNavItems}
-                activeItem={activeTopNavItem}
-                onSelect={(item) => setActiveView(item === "Chat" ? "chat" : "ingestion")}
-              />
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <ToolbarButton icon={Search} label="Search" />
-              <ToolbarButton icon={Bell} label="Notifications" />
-              <ToolbarButton icon={Cloud} label="Cloud sync" />
-              <button
-                className="hidden h-8 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[13px] font-medium text-ink shadow-sm transition hover:border-line-strong sm:flex"
-                type="button"
-                onClick={resetChat}
-              >
-                <Plus className="size-3.5" />
-                New Chat
-              </button>
+            <div className="flex items-center">
               <div className="ml-1 flex size-8 items-center justify-center rounded-full bg-surface-muted text-[13px] font-semibold text-accent ring-1 ring-line">
                 F
               </div>
@@ -730,9 +700,22 @@ export default function Home() {
                       </p>
                     </div>
                   </div>
-                  <StatusPill tone={selectedDocumentIds.length > 0 ? "accent" : "neutral"}>
-                    {selectedDocumentIds.length > 0 ? "Selected Scope" : "Hybrid Retrieval"}
-                  </StatusPill>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      className="flex h-8 items-center gap-1.5 rounded-control border border-line bg-surface px-2.5 text-[13px] font-medium text-ink shadow-sm transition hover:border-line-strong hover:bg-surface-muted"
+                      type="button"
+                      aria-label="New chat"
+                      onClick={resetChat}
+                    >
+                      <Plus className="size-3.5" />
+                      <span className="hidden sm:inline">New Chat</span>
+                    </button>
+                    <span className="hidden sm:inline-flex">
+                      <StatusPill tone={selectedDocumentIds.length > 0 ? "accent" : "neutral"}>
+                        {selectedDocumentIds.length > 0 ? "Selected Scope" : "Hybrid Retrieval"}
+                      </StatusPill>
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">

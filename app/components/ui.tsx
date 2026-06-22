@@ -7,31 +7,6 @@ export function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
-export function ToolbarButton({
-  icon: Icon,
-  label,
-  className,
-  type = "button",
-  ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  icon: LucideIcon;
-  label: string;
-}) {
-  return (
-    <button
-      {...props}
-      className={cx(
-        "flex size-8 items-center justify-center rounded-control text-muted transition hover:bg-surface-muted hover:text-ink",
-        className,
-      )}
-      aria-label={label}
-      type={type}
-    >
-      <Icon className="size-[17px]" />
-    </button>
-  );
-}
-
 export function SidebarItem({
   icon: Icon,
   label,
@@ -59,36 +34,6 @@ export function SidebarItem({
       <Icon className={cx("size-4", active ? "text-accent" : "text-subtle")} />
       {label}
     </button>
-  );
-}
-
-export function SegmentedControl({
-  items,
-  activeItem,
-  onSelect,
-}: {
-  items: string[];
-  activeItem: string;
-  onSelect?: (item: string) => void;
-}) {
-  return (
-    <div className="hidden rounded-control bg-surface-muted p-0.5 md:flex">
-      {items.map((item) => (
-        <button
-          key={item}
-          className={cx(
-            "h-7 rounded-[8px] px-3 text-[13px] font-medium transition",
-            item === activeItem
-              ? "bg-surface text-ink shadow-sm"
-              : "text-muted hover:text-ink",
-          )}
-          onClick={() => onSelect?.(item)}
-          type="button"
-        >
-          {item}
-        </button>
-      ))}
-    </div>
   );
 }
 
