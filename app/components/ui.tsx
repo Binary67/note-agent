@@ -86,7 +86,7 @@ export function PrimaryButton({
 
 export function InspectorPanel({ children }: { children: ReactNode }) {
   return (
-    <aside className="self-start overflow-hidden rounded-panel border border-line bg-surface shadow-panel xl:sticky xl:top-[76px]">
+    <aside className="flex self-stretch overflow-hidden rounded-panel border border-line bg-surface shadow-panel xl:sticky xl:top-[76px]">
       {children}
     </aside>
   );

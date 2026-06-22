@@ -117,6 +117,16 @@ export function IngestionView({
   const hasUploadPagination = uploads.length > UPLOADS_PER_PAGE;
   const isTransferDisabled = isIngesting || stats.ingesting > 0 || isExporting || isImporting;
   const uploadProgressPercent = Math.min(100, Math.max(0, Math.round(uploadProgress?.percent ?? 0)));
+  const indexedPercent =
+    stats.total === 0 ? 0 : Math.round((stats.indexed / stats.total) * 100);
+  const latestUploadTime = uploads[0]?.uploadedAt ?? "Not yet";
+  const indexMetrics = [
+    { label: "Indexed files", value: `${stats.indexed}/${stats.total}` },
+    { label: "Ready queue", value: stats.ready.toLocaleString() },
+    { label: "Issues", value: stats.errors.toLocaleString() },
+    { label: "Folders", value: folders.length.toLocaleString() },
+  ];
+  const recentUploads = uploads.slice(0, 3);
 
   useEffect(() => {
     const previousUploadCount = previousUploadCountRef.current;
@@ -226,7 +236,7 @@ export function IngestionView({
           </div>
 
           {uploads.length === 0 ? (
-            <div className="px-4 py-10 text-center">
+            <div className="flex min-h-[280px] flex-col items-center justify-center px-4 py-10 text-center">
               <FileText className="mx-auto size-7 text-subtle" />
               <p className="mt-3 text-sm font-medium text-ink">No uploads yet</p>
               <p className="mt-1 text-[13px] text-muted">
@@ -350,7 +360,7 @@ export function IngestionView({
       </div>
 
       <InspectorPanel>
-        <section className="p-4">
+        <section className="flex min-h-0 w-full flex-col p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
@@ -367,7 +377,20 @@ export function IngestionView({
             {readiness.description}
           </p>
 
-          <div className="mt-4 space-y-3">
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-xs font-medium">
+              <span className="text-muted">Index coverage</span>
+              <span className="text-ink">{indexedPercent}%</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-pressed">
+              <div
+                className="h-full rounded-full bg-success transition-[width] duration-300 ease-out"
+                style={{ width: `${indexedPercent}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-2.5">
             {indexSteps.map((step) => (
               <div key={step.label} className="flex items-start gap-3">
                 <span
@@ -386,59 +409,119 @@ export function IngestionView({
             ))}
           </div>
 
-          <PrimaryButton
-            className="mt-4 w-full"
-            disabled={stats.ready === 0 || isIngesting || unassignedReadyCount > 0}
-            onClick={onStartIngestion}
-          >
-            {isIngesting
-              ? "Indexing..."
-              : stats.ready > 0
-                ? "Start Indexing"
-                : stats.indexed > 0
-                  ? "Indexed"
-                  : "Start Indexing"}
-            <RefreshCcw className={cx("size-4", isIngesting && "animate-spin")} />
-          </PrimaryButton>
-          {unassignedReadyCount > 0 && (
-            <p className="mt-2 text-xs leading-5 text-muted">
-              Assign folders to all ready documents before indexing.
-              {unassignedReadyCount > 0
-                ? ` ${unassignedReadyCount} ${
-                    unassignedReadyCount === 1 ? "document" : "documents"
-                  } unassigned.`
-                : ""}
-            </p>
-          )}
+          <div className="mt-5 border-t border-line pt-4">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
+                Index Details
+              </h4>
+              <span className="text-xs text-muted">{latestUploadTime}</span>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {indexMetrics.map((metric) => (
+                <div
+                  key={metric.label}
+                  className="rounded-control bg-surface-muted px-3 py-2"
+                >
+                  <p className="text-[11px] font-medium text-muted">{metric.label}</p>
+                  <p className="mt-0.5 text-[15px] font-semibold text-ink">
+                    {metric.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <SecondaryButton
+          <div className="mt-5 border-t border-line pt-4">
+            <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
+              Recent Activity
+            </h4>
+            <div className="mt-3 space-y-2.5">
+              {recentUploads.length === 0 ? (
+                <p className="text-[13px] text-muted">No document activity yet.</p>
+              ) : (
+                recentUploads.map((upload) => {
+                  const { stem } = splitName(upload.name);
+                  return (
+                    <div key={upload.id} className="flex items-start gap-2.5">
+                      <span
+                        className={cx(
+                          "mt-1.5 size-2 rounded-full",
+                          upload.status === "Indexed" && "bg-success",
+                          upload.status === "Ingesting" && "bg-accent",
+                          upload.status === "Ready" && "bg-line-strong",
+                          upload.status === "Error" && "bg-danger",
+                        )}
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium text-ink">
+                          {stem}
+                        </p>
+                        <p className="text-xs text-muted">
+                          {upload.status} · {upload.uploadedAt}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="mt-auto border-t border-line pt-4">
+            <PrimaryButton
               className="w-full"
-              disabled={isTransferDisabled}
-              onClick={onExportKnowledgeBase}
+              disabled={stats.ready === 0 || isIngesting || unassignedReadyCount > 0}
+              onClick={onStartIngestion}
             >
-              <Download className="size-4" />
-              {isExporting ? "Exporting" : "Export"}
-            </SecondaryButton>
-            <SecondaryButton
-              className="w-full"
-              disabled={isTransferDisabled}
-              onClick={() => importInputRef.current?.click()}
-            >
-              <FileUp className="size-4" />
-              {isImporting ? "Importing" : "Import"}
-            </SecondaryButton>
-            <input
-              ref={importInputRef}
-              className="sr-only"
-              type="file"
-              accept=".zip,application/zip,application/x-zip-compressed"
-              onChange={(event) => {
-                const file = event.target.files?.[0] ?? null;
-                void onImportKnowledgeBase(file);
-                event.target.value = "";
-              }}
-            />
+              {isIngesting
+                ? "Indexing..."
+                : stats.ready > 0
+                  ? "Start Indexing"
+                  : stats.indexed > 0
+                    ? "Indexed"
+                    : "Start Indexing"}
+              <RefreshCcw className={cx("size-4", isIngesting && "animate-spin")} />
+            </PrimaryButton>
+            {unassignedReadyCount > 0 && (
+              <p className="mt-2 text-xs leading-5 text-muted">
+                Assign folders to all ready documents before indexing.
+                {unassignedReadyCount > 0
+                  ? ` ${unassignedReadyCount} ${
+                      unassignedReadyCount === 1 ? "document" : "documents"
+                    } unassigned.`
+                  : ""}
+              </p>
+            )}
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <SecondaryButton
+                className="w-full"
+                disabled={isTransferDisabled}
+                onClick={onExportKnowledgeBase}
+              >
+                <Download className="size-4" />
+                {isExporting ? "Exporting" : "Export"}
+              </SecondaryButton>
+              <SecondaryButton
+                className="w-full"
+                disabled={isTransferDisabled}
+                onClick={() => importInputRef.current?.click()}
+              >
+                <FileUp className="size-4" />
+                {isImporting ? "Importing" : "Import"}
+              </SecondaryButton>
+              <input
+                ref={importInputRef}
+                className="sr-only"
+                type="file"
+                accept=".zip,application/zip,application/x-zip-compressed"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  void onImportKnowledgeBase(file);
+                  event.target.value = "";
+                }}
+              />
+            </div>
           </div>
         </section>
       </InspectorPanel>
