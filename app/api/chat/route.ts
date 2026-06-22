@@ -1,5 +1,7 @@
 import {
   DEFAULT_MAX_RETRIEVED_DOCUMENTS,
+  MAX_RETRIEVED_DOCUMENTS,
+  MIN_RETRIEVED_DOCUMENTS,
   answerQuestion,
 } from "@/lib/retrieval";
 
@@ -28,7 +30,10 @@ export async function POST(request: Request) {
   const maxRetrievedDocuments =
     typeof body.maxRetrievedDocuments === "number" &&
     Number.isFinite(body.maxRetrievedDocuments)
-      ? body.maxRetrievedDocuments
+      ? Math.min(
+          MAX_RETRIEVED_DOCUMENTS,
+          Math.max(MIN_RETRIEVED_DOCUMENTS, Math.trunc(body.maxRetrievedDocuments)),
+        )
       : DEFAULT_MAX_RETRIEVED_DOCUMENTS;
 
   try {

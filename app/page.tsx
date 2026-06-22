@@ -91,7 +91,8 @@ const navigationItems: Array<{
 ];
 
 const topNavItems = ["Ingestion", "Chat"];
-const retrievedDocumentOptions = [1, 3, 5];
+const retrievedDocumentsMin = 1;
+const retrievedDocumentsMax = 10;
 
 function isTextFile(file: File) {
   return file.type === "text/plain" || file.name.toLowerCase().endsWith(".txt");
@@ -600,39 +601,36 @@ export default function Home() {
                     <span className="min-w-0 flex-1 font-medium text-ink">All Documents</span>
                   </button>
 
-                  <div className="mt-3 rounded-control bg-surface-muted p-2">
-                    <div className="flex items-center justify-between text-xs text-muted">
-                      <span>Auto retrieval reads</span>
-                      <span>
-                        {selectedDocumentIds.length > 0
-                          ? "Bypassed"
-                          : plural(maxRetrievedDocuments, "document")}
-                      </span>
+                  {selectedDocumentIds.length === 0 ? (
+                    <div className="mt-3 rounded-control bg-surface-muted p-3">
+                      <div className="flex items-center justify-between gap-3 text-xs">
+                        <span className="text-muted">Retrieved documents</span>
+                        <span className="font-medium text-ink">
+                          {plural(maxRetrievedDocuments, "document")}
+                        </span>
+                      </div>
+                      <input
+                        aria-label="Retrieved documents"
+                        className="mt-3 h-2 w-full cursor-pointer accent-accent"
+                        min={retrievedDocumentsMin}
+                        max={retrievedDocumentsMax}
+                        step={1}
+                        type="range"
+                        value={maxRetrievedDocuments}
+                        onChange={(event) =>
+                          setMaxRetrievedDocuments(Number(event.target.value))
+                        }
+                      />
+                      <div className="mt-1 flex justify-between text-[11px] text-subtle">
+                        <span>{retrievedDocumentsMin}</span>
+                        <span>{retrievedDocumentsMax}</span>
+                      </div>
                     </div>
-                    <div
-                      className={cx(
-                        "mt-2 grid grid-cols-3 gap-1",
-                        selectedDocumentIds.length > 0 && "opacity-50",
-                      )}
-                    >
-                      {retrievedDocumentOptions.map((option) => (
-                        <button
-                          key={option}
-                          className={cx(
-                            "h-7 rounded-[8px] text-xs font-medium transition",
-                            maxRetrievedDocuments === option
-                              ? "bg-surface text-ink shadow-sm"
-                              : "text-muted hover:text-ink",
-                          )}
-                          disabled={selectedDocumentIds.length > 0}
-                          type="button"
-                          onClick={() => setMaxRetrievedDocuments(option)}
-                        >
-                          {option}
-                        </button>
-                      ))}
+                  ) : (
+                    <div className="mt-3 rounded-control bg-surface-muted px-3 py-2 text-xs text-muted">
+                      Selected documents are read directly.
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className="max-h-[calc(100vh-280px)] overflow-y-auto p-2">

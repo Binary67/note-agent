@@ -10,6 +10,8 @@ import {
 } from "./storage";
 
 export const DEFAULT_MAX_RETRIEVED_DOCUMENTS = 3;
+export const MIN_RETRIEVED_DOCUMENTS = 1;
+export const MAX_RETRIEVED_DOCUMENTS = 10;
 
 export type AnswerDocument = {
   id: string;
@@ -289,8 +291,13 @@ async function retrieveDocuments(
   const selectedDocuments =
     rankedDocuments.length > 0 ? rankedDocuments : fallbackDocuments;
 
+  const documentLimit = Math.min(
+    MAX_RETRIEVED_DOCUMENTS,
+    Math.max(MIN_RETRIEVED_DOCUMENTS, maxRetrievedDocuments),
+  );
+
   return selectedDocuments
-    .slice(0, Math.max(1, maxRetrievedDocuments))
+    .slice(0, documentLimit)
     .map((document) => ({
       id: document.record.id,
       name: document.record.name,
