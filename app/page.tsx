@@ -12,6 +12,7 @@ import {
   MessageSquareText,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   Plus,
   RefreshCcw,
   Search,
@@ -35,8 +36,11 @@ import {
 } from "react";
 import {
   cx,
+  DangerButton,
   InspectorPanel,
+  Modal,
   PrimaryButton,
+  SecondaryButton,
   SidebarItem,
   StatusPill,
 } from "@/app/components/ui";
@@ -72,6 +76,7 @@ type ListResponse = { documents: UploadItem[] };
 type UploadResponse = { documents: UploadItem[] };
 type IngestResponse = { started: number };
 type DeleteResponse = { ok: boolean };
+type RenameResponse = { document: UploadItem };
 type ChatResponse = {
   answer: string;
   mode: "selected" | "retrieved";
@@ -158,7 +163,7 @@ export default function Home() {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
-  const [notice, setNotice] = useState("Drop TXT files here or browse from your computer.");
+  const [notice, setNotice] = useState("Drop files here or browse from your computer.");
   const [documentFilter, setDocumentFilter] = useState("");
   const [isContextCollapsed, setIsContextCollapsed] = useState(false);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
@@ -166,6 +171,8 @@ export default function Home() {
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(createInitialMessages);
   const [isAnswering, setIsAnswering] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<UploadItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UploadItem | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -250,7 +257,7 @@ export default function Home() {
       return {
         label: "Ready",
         title: `${stats.ready} ready to index`,
-        description: "Start indexing to make the staged TXT files searchable.",
+        description: "Start indexing to make the staged documents searchable.",
         tone: "accent" as const,
       };
     }
@@ -259,7 +266,7 @@ export default function Home() {
       return {
         label: "Review",
         title: `${stats.errors} indexing issue${stats.errors === 1 ? "" : "s"}`,
-        description: "Remove failed documents or upload a clean TXT file before retrying.",
+        description: "Remove failed documents or upload a clean file before retrying.",
         tone: "danger" as const,
       };
     }
@@ -276,7 +283,7 @@ export default function Home() {
     return {
       label: "Idle",
       title: "No documents staged",
-      description: "Import TXT files to prepare the knowledge base.",
+      description: "Import documents to prepare the knowledge base.",
       tone: "neutral" as const,
     };
   }, [isIngesting, stats]);
@@ -336,7 +343,7 @@ export default function Home() {
         await fetch("/api/documents", { method: "POST", body: formData }),
       );
       setUploads((current) => [...data.documents, ...current]);
-      setNotice(`${textFiles.length} TXT file added to the ingestion queue.`);
+      setNotice(`${plural(textFiles.length, "file")} added to the ingestion queue.`);
       setActiveView("ingestion");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Upload failed.");
@@ -380,17 +387,71 @@ export default function Home() {
     }
   }
 
-  async function removeUpload(id: string) {
+  function splitName(name: string): { stem: string; ext: string } {
+    const dot = name.lastIndexOf(".");
+
+    if (dot <= 0) {
+      return { stem: name, ext: "" };
+    }
+
+    return { stem: name.slice(0, dot), ext: name.slice(dot) };
+  }
+
+  function openRename(target: UploadItem) {
+    setRenameTarget(target);
+  }
+
+  function openDelete(target: UploadItem) {
+    setDeleteTarget(target);
+  }
+
+  async function confirmRename(nextName: string) {
+    const target = renameTarget;
+
+    if (!target || !nextName.trim() || nextName.trim() === target.name) {
+      setRenameTarget(null);
+      return;
+    }
+
+    try {
+      const data = await parseJson<RenameResponse>(
+        await fetch(`/api/documents/${target.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: nextName.trim() }),
+        }),
+      );
+      setUploads((current) =>
+        current.map((upload) =>
+          upload.id === target.id ? { ...upload, name: data.document.name } : upload,
+        ),
+      );
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to rename document.");
+    } finally {
+      setRenameTarget(null);
+    }
+  }
+
+  async function confirmDelete() {
+    const target = deleteTarget;
+
+    if (!target) {
+      return;
+    }
+
     try {
       await parseJson<DeleteResponse>(
-        await fetch(`/api/documents/${id}`, { method: "DELETE" }),
+        await fetch(`/api/documents/${target.id}`, { method: "DELETE" }),
       );
-      setUploads((current) => current.filter((upload) => upload.id !== id));
+      setUploads((current) => current.filter((upload) => upload.id !== target.id));
       setSelectedDocumentIds((current) =>
-        current.filter((selectedId) => selectedId !== id),
+        current.filter((selectedId) => selectedId !== target.id),
       );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Failed to remove document.");
+    } finally {
+      setDeleteTarget(null);
     }
   }
 
@@ -622,7 +683,7 @@ export default function Home() {
                           No indexed documents
                         </p>
                         <p className="mt-1 text-xs leading-5 text-muted">
-                          Import and index TXT files before chatting.
+                          Import and index documents before chatting.
                         </p>
                       </div>
                     ) : filteredIndexedDocuments.length === 0 ? (
@@ -777,7 +838,7 @@ export default function Home() {
                       Ingestion
                     </h2>
                     <p className="mt-1 max-w-2xl text-[13px] leading-5 text-muted">
-                      Import TXT documents, then prepare the local index.
+                      Import documents, then prepare the local index.
                     </p>
                   </div>
 
@@ -817,7 +878,7 @@ export default function Home() {
                     </span>
                     <span className="min-w-0">
                       <span className="block text-[15px] font-semibold text-ink">
-                        Drop TXT files here
+                        Drop files here
                       </span>
                       <span className="mt-0.5 block truncate text-[13px] text-muted">
                         {isUploading ? "Uploading..." : notice}
@@ -838,7 +899,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-[minmax(0,1fr)_104px_32px] border-b border-line bg-surface-muted px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle sm:grid-cols-[minmax(0,1fr)_80px_112px_32px] md:grid-cols-[minmax(0,1fr)_80px_112px_92px_32px]">
+                  <div className="grid grid-cols-[minmax(0,1fr)_104px_64px] border-b border-line bg-surface-muted px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle sm:grid-cols-[minmax(0,1fr)_80px_112px_64px] md:grid-cols-[minmax(0,1fr)_80px_112px_92px_64px]">
                     <span>File</span>
                     <span className="hidden sm:block">Size</span>
                     <span>Status</span>
@@ -851,7 +912,7 @@ export default function Home() {
                       <FileText className="mx-auto size-7 text-subtle" />
                       <p className="mt-3 text-sm font-medium text-ink">No uploads yet</p>
                       <p className="mt-1 text-[13px] text-muted">
-                        Import TXT files to start building the local index.
+                        Add documents to start building the local index.
                       </p>
                     </div>
                   ) : (
@@ -859,7 +920,7 @@ export default function Home() {
                       {uploads.map((upload) => (
                         <div
                           key={upload.id}
-                          className="grid min-h-14 grid-cols-[minmax(0,1fr)_104px_32px] items-center px-4 py-2.5 text-[13px] sm:grid-cols-[minmax(0,1fr)_80px_112px_32px] md:grid-cols-[minmax(0,1fr)_80px_112px_92px_32px]"
+                          className="grid min-h-14 grid-cols-[minmax(0,1fr)_104px_64px] items-center px-4 py-2.5 text-[13px] sm:grid-cols-[minmax(0,1fr)_80px_112px_64px] md:grid-cols-[minmax(0,1fr)_80px_112px_92px_64px]"
                         >
                           <div className="flex min-w-0 items-center gap-3">
                             <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-surface-muted text-muted">
@@ -884,14 +945,24 @@ export default function Home() {
                             </StatusPill>
                           </span>
                           <span className="hidden text-muted md:block">{upload.uploadedAt}</span>
-                          <button
-                            className="flex size-8 items-center justify-center rounded-control text-subtle transition hover:bg-surface-muted hover:text-ink"
-                            type="button"
-                            aria-label={`Remove ${upload.name}`}
-                            onClick={() => removeUpload(upload.id)}
-                          >
-                            <X className="size-4" />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              className="flex size-8 items-center justify-center rounded-control text-subtle transition hover:bg-surface-muted hover:text-ink"
+                              type="button"
+                              aria-label={`Rename ${upload.name}`}
+                              onClick={() => openRename(upload)}
+                            >
+                              <Pencil className="size-4" />
+                            </button>
+                            <button
+                              className="flex size-8 items-center justify-center rounded-control text-subtle transition hover:bg-surface-muted hover:text-ink"
+                              type="button"
+                              aria-label={`Remove ${upload.name}`}
+                              onClick={() => openDelete(upload)}
+                            >
+                              <X className="size-4" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -956,6 +1027,19 @@ export default function Home() {
           )}
         </section>
       </div>
+
+      <RenameDialog
+        target={renameTarget}
+        onClose={() => setRenameTarget(null)}
+        onConfirm={confirmRename}
+        splitName={splitName}
+      />
+
+      <DeleteDialog
+        target={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
     </main>
   );
 }
@@ -1014,5 +1098,154 @@ function SummaryChip({ label, value }: { label: string; value: number }) {
       <span className="font-semibold text-ink">{value}</span>
       {label}
     </span>
+  );
+}
+
+function RenameDialog({
+  target,
+  onClose,
+  onConfirm,
+  splitName,
+}: {
+  target: UploadItem | null;
+  onClose: () => void;
+  onConfirm: (nextName: string) => void;
+  splitName: (name: string) => { stem: string; ext: string };
+}) {
+  if (!target) {
+    return null;
+  }
+
+  return (
+    <RenameDialogInner
+      key={target.id}
+      target={target}
+      onClose={onClose}
+      onConfirm={onConfirm}
+      splitName={splitName}
+    />
+  );
+}
+
+function RenameDialogInner({
+  target,
+  onClose,
+  onConfirm,
+  splitName,
+}: {
+  target: UploadItem;
+  onClose: () => void;
+  onConfirm: (nextName: string) => void;
+  splitName: (name: string) => { stem: string; ext: string };
+}) {
+  const { stem: initialStem, ext } = splitName(target.name);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [stem, setStem] = useState(initialStem);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
+
+    return () => window.clearTimeout(id);
+  }, []);
+
+  const nextName = ext ? `${stem.trim()}.${ext.slice(1)}` : stem.trim();
+  const canConfirm = stem.trim().length > 0 && nextName !== target.name;
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (canConfirm) {
+      onConfirm(nextName);
+    }
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      onClose();
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      icon={FileText}
+      title="Rename Document"
+      footer={
+        <>
+          <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
+          <PrimaryButton
+            disabled={!canConfirm}
+            form="rename-form"
+            type="submit"
+          >
+            Rename
+          </PrimaryButton>
+        </>
+      }
+    >
+      <form id="rename-form" onSubmit={handleSubmit}>
+        <label
+          className="flex h-9 items-center gap-2 rounded-control border border-line bg-surface px-3 text-[13px] focus-within:border-line-strong"
+          onClick={() => inputRef.current?.focus()}
+        >
+          <input
+            ref={inputRef}
+            className="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-subtle"
+            placeholder="Document name"
+            value={stem}
+            onChange={(event) => setStem(event.target.value)}
+            onKeyDown={handleKeyDown}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          {ext && (
+            <span className="shrink-0 text-subtle">{ext}</span>
+          )}
+        </label>
+        <p className="mt-2 text-xs text-muted">
+          {ext
+            ? `Keeps the ${ext} extension.`
+            : "No file extension to preserve."}
+        </p>
+      </form>
+    </Modal>
+  );
+}
+
+function DeleteDialog({
+  target,
+  onClose,
+  onConfirm,
+}: {
+  target: UploadItem | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!target) {
+    return null;
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      icon={FileText}
+      title="Delete Document?"
+      footer={
+        <>
+          <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
+          <DangerButton onClick={onConfirm}>Delete</DangerButton>
+        </>
+      }
+    >
+      <p className="text-[13px] leading-5 text-muted">
+        Delete <span className="font-medium text-ink">&ldquo;{target.name}&rdquo;</span>?
+        This removes the file and its indexed data.
+      </p>
+    </Modal>
   );
 }

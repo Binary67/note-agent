@@ -71,3 +71,21 @@ select,
 textarea {
   font: inherit;
 }
+
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-scale-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.modal-overlay {
+  animation: modal-fade-in 150ms ease-out;
+}
+
+.modal-sheet {
+  animation: modal-scale-in 150ms ease-out;
+}
