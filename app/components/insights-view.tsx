@@ -381,16 +381,26 @@ function FolderInsightContent({ folder }: { folder: FolderInsightView }) {
         )}
       </div>
 
-      <details className="group">
-        <summary className="flex h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 sm:px-5">
-          <div className="min-w-0">
-            <h3 className="text-[13px] font-semibold text-ink">Documents</h3>
+      <details className="group border-t-8 border-canvas bg-surface">
+        <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 transition hover:bg-surface-muted sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-control bg-surface-muted text-muted ring-1 ring-line">
+              <FileText className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-[13px] font-semibold text-ink">Documents</h3>
+              <p className="mt-0.5 truncate text-xs text-muted">
+                Open source-level notes and per-document summaries.
+              </p>
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <span className="text-xs text-muted">
+            <span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium text-muted">
               {folder.documents.length.toLocaleString()} total
             </span>
-            <ChevronDown className="size-4 text-subtle transition group-open:rotate-180" />
+            <span className="flex size-8 items-center justify-center rounded-control bg-surface-muted text-subtle transition group-open:bg-surface-pressed group-open:text-ink">
+              <ChevronDown className="size-4 transition group-open:rotate-180" />
+            </span>
           </div>
         </summary>
         <div className="border-t border-line">
