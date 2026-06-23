@@ -360,114 +360,116 @@ export function IngestionView({
       </div>
 
       <InspectorPanel>
-        <section className="flex min-h-0 w-full flex-col p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
-                Index Status
-              </p>
-              <h3 className="mt-1 text-base font-semibold text-ink">
-                {readiness.title}
-              </h3>
-            </div>
-            <StatusPill tone={readiness.tone}>{readiness.label}</StatusPill>
-          </div>
-
-          <p className="mt-2 text-[13px] leading-5 text-muted">
-            {readiness.description}
-          </p>
-
-          <div className="mt-4">
-            <div className="flex items-center justify-between text-xs font-medium">
-              <span className="text-muted">Index coverage</span>
-              <span className="text-ink">{indexedPercent}%</span>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-pressed">
-              <div
-                className="h-full rounded-full bg-success transition-[width] duration-300 ease-out"
-                style={{ width: `${indexedPercent}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="mt-5 space-y-2.5">
-            {indexSteps.map((step) => (
-              <div key={step.label} className="flex items-start gap-3">
-                <span
-                  className={cx(
-                    "mt-1.5 size-2.5 rounded-full ring-4",
-                    step.state === "complete" && "bg-success ring-success-soft",
-                    step.state === "active" && "bg-accent ring-accent-soft",
-                    step.state === "waiting" && "bg-line-strong ring-surface-muted",
-                  )}
-                />
-                <div className="min-w-0">
-                  <p className="text-[13px] font-medium text-ink">{step.label}</p>
-                  <p className="text-xs text-muted">{step.detail}</p>
-                </div>
+        <section className="flex min-h-0 w-full flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
+                  Index Status
+                </p>
+                <h3 className="mt-1 text-base font-semibold text-ink">
+                  {readiness.title}
+                </h3>
               </div>
-            ))}
-          </div>
-
-          <div className="mt-5 border-t border-line pt-4">
-            <div className="flex items-center justify-between gap-3">
-              <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
-                Index Details
-              </h4>
-              <span className="text-xs text-muted">{latestUploadTime}</span>
+              <StatusPill tone={readiness.tone}>{readiness.label}</StatusPill>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {indexMetrics.map((metric) => (
+
+            <p className="mt-2 text-[13px] leading-5 text-muted">
+              {readiness.description}
+            </p>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs font-medium">
+                <span className="text-muted">Index coverage</span>
+                <span className="text-ink">{indexedPercent}%</span>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-pressed">
                 <div
-                  key={metric.label}
-                  className="rounded-control bg-surface-muted px-3 py-2"
-                >
-                  <p className="text-[11px] font-medium text-muted">{metric.label}</p>
-                  <p className="mt-0.5 text-[15px] font-semibold text-ink">
-                    {metric.value}
-                  </p>
+                  className="h-full rounded-full bg-success transition-[width] duration-300 ease-out"
+                  style={{ width: `${indexedPercent}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-2.5">
+              {indexSteps.map((step) => (
+                <div key={step.label} className="flex items-start gap-3">
+                  <span
+                    className={cx(
+                      "mt-1.5 size-2.5 rounded-full ring-4",
+                      step.state === "complete" && "bg-success ring-success-soft",
+                      step.state === "active" && "bg-accent ring-accent-soft",
+                      step.state === "waiting" && "bg-line-strong ring-surface-muted",
+                    )}
+                  />
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-ink">{step.label}</p>
+                    <p className="text-xs text-muted">{step.detail}</p>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
 
-          <div className="mt-5 border-t border-line pt-4">
-            <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
-              Recent Activity
-            </h4>
-            <div className="mt-3 space-y-2.5">
-              {recentUploads.length === 0 ? (
-                <p className="text-[13px] text-muted">No document activity yet.</p>
-              ) : (
-                recentUploads.map((upload) => {
-                  const { stem } = splitName(upload.name);
-                  return (
-                    <div key={upload.id} className="flex items-start gap-2.5">
-                      <span
-                        className={cx(
-                          "mt-1.5 size-2 rounded-full",
-                          upload.status === "Indexed" && "bg-success",
-                          upload.status === "Ingesting" && "bg-accent",
-                          upload.status === "Ready" && "bg-line-strong",
-                          upload.status === "Error" && "bg-danger",
-                        )}
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-medium text-ink">
-                          {stem}
-                        </p>
-                        <p className="text-xs text-muted">
-                          {upload.status} · {upload.uploadedAt}
-                        </p>
+            <div className="mt-5 border-t border-line pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
+                  Index Details
+                </h4>
+                <span className="text-xs text-muted">{latestUploadTime}</span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {indexMetrics.map((metric) => (
+                  <div
+                    key={metric.label}
+                    className="rounded-control bg-surface-muted px-3 py-2"
+                  >
+                    <p className="text-[11px] font-medium text-muted">{metric.label}</p>
+                    <p className="mt-0.5 text-[15px] font-semibold text-ink">
+                      {metric.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-5 border-t border-line pt-4">
+              <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
+                Recent Activity
+              </h4>
+              <div className="mt-3 space-y-2.5">
+                {recentUploads.length === 0 ? (
+                  <p className="text-[13px] text-muted">No document activity yet.</p>
+                ) : (
+                  recentUploads.map((upload) => {
+                    const { stem } = splitName(upload.name);
+                    return (
+                      <div key={upload.id} className="flex items-start gap-2.5">
+                        <span
+                          className={cx(
+                            "mt-1.5 size-2 rounded-full",
+                            upload.status === "Indexed" && "bg-success",
+                            upload.status === "Ingesting" && "bg-accent",
+                            upload.status === "Ready" && "bg-line-strong",
+                            upload.status === "Error" && "bg-danger",
+                          )}
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-medium text-ink">
+                            {stem}
+                          </p>
+                          <p className="text-xs text-muted">
+                            {upload.status} · {upload.uploadedAt}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })
-              )}
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="mt-auto border-t border-line pt-4">
+          <div className="shrink-0 border-t border-line bg-surface p-4">
             <PrimaryButton
               className="w-full"
               disabled={stats.ready === 0 || isIngesting || unassignedReadyCount > 0}
