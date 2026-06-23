@@ -5,13 +5,15 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { AzureOpenAI } from "openai";
+import ffmpegStaticPath from "ffmpeg-static";
 import { getConfig } from "./config";
 
 const execFileAsync = promisify(execFile);
 const TRANSCRIPT_HEADER = "Audio transcript. Speaker labels are not available.";
 const CHUNK_SECONDS = 20 * 60;
 const PROMPT_TAIL_CHARS = 1200;
-const FFMPEG_PATH = path.join(process.cwd(), "node_modules", "ffmpeg-static", "ffmpeg");
+const FFMPEG_SETUP_MESSAGE =
+  "Audio splitting requires ffmpeg. Set FFMPEG_PATH in .env to a working ffmpeg executable, or reinstall dependencies so ffmpeg-static can provide the bundled binary.";
 
 type AudioChunk = {
   name: string;
@@ -51,12 +53,27 @@ function stemFor(name: string): string {
   return stem || "audio";
 }
 
-async function splitAudio(file: File, tempDir: string): Promise<AudioChunk[]> {
-  try {
-    await fs.access(FFMPEG_PATH);
-  } catch {
-    throw new Error("Audio splitting requires ffmpeg, but the bundled binary was not found.");
+async function getFfmpegPath(): Promise<string> {
+  const configuredPath = getConfig().transcription.ffmpegPath;
+  const resolvedPath = configuredPath || ffmpegStaticPath;
+
+  if (!resolvedPath) {
+    throw new Error(FFMPEG_SETUP_MESSAGE);
   }
+
+  try {
+    await fs.access(resolvedPath);
+    await execFileAsync(resolvedPath, ["-version"], { maxBuffer: 1024 * 1024 });
+  } catch (error) {
+    const detail = error instanceof Error ? ` ${error.message}` : "";
+    throw new Error(`${FFMPEG_SETUP_MESSAGE} Current path: ${resolvedPath}.${detail}`);
+  }
+
+  return resolvedPath;
+}
+
+async function splitAudio(file: File, tempDir: string): Promise<AudioChunk[]> {
+  const ffmpegPath = await getFfmpegPath();
 
   const chunksDir = path.join(tempDir, "chunks");
   const inputPath = path.join(tempDir, `input${extensionFor(file.name)}`);
@@ -66,7 +83,7 @@ async function splitAudio(file: File, tempDir: string): Promise<AudioChunk[]> {
   await fs.writeFile(inputPath, Buffer.from(await file.arrayBuffer()));
 
   await execFileAsync(
-    FFMPEG_PATH,
+    ffmpegPath,
     [
       "-hide_banner",
       "-loglevel",

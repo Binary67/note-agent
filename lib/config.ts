@@ -15,6 +15,7 @@ export type Config = {
     endpoint: string;
     deployment: string;
     apiVersion: string;
+    ffmpegPath: string;
     maxBytes: number;
   };
   ingestion: {
@@ -50,6 +51,7 @@ export function getConfig(): Config {
     process.env.AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT ?? "";
   const transcriptionApiVersion =
     process.env.AZURE_OPENAI_TRANSCRIPTION_API_VERSION ?? "";
+  const ffmpegPath = process.env.FFMPEG_PATH?.trim() ?? "";
 
   return {
     azure: { apiKey, endpoint, chatDeployment, embeddingDeployment },
@@ -58,6 +60,7 @@ export function getConfig(): Config {
       endpoint: transcriptionEndpoint,
       deployment: transcriptionDeployment,
       apiVersion: transcriptionApiVersion,
+      ffmpegPath,
       maxBytes: readInt(
         "AZURE_OPENAI_TRANSCRIPTION_MAX_BYTES",
         24 * 1024 * 1024,
