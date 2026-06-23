@@ -17,6 +17,7 @@ import {
 
 const APP_ID = "note-agent";
 const SCHEMA_VERSION = 1;
+const INSIGHTS_FILE = "insights.json";
 
 type KnowledgeBundleManifest = {
   app: typeof APP_ID;
@@ -52,6 +53,12 @@ export async function exportKnowledgeBase(): Promise<Buffer> {
   zip.file("registry.json", JSON.stringify(documents, null, 2));
   zip.file("folders.json", JSON.stringify(folders, null, 2));
 
+  const insights = await readOptionalLocalText(path.join(process.cwd(), "data", INSIGHTS_FILE));
+
+  if (insights) {
+    zip.file(INSIGHTS_FILE, insights);
+  }
+
   for (const document of documents) {
     const source = await readSource(document.id);
     const index = await readIndex(document.id);
@@ -79,6 +86,7 @@ export async function importKnowledgeBase(buffer: Buffer): Promise<KnowledgeImpo
   const manifest = validateManifest(await readJsonEntry(zip, "manifest.json"));
   const documents = validateDocuments(await readJsonEntry(zip, "registry.json"));
   const folders = validateFolders(await readJsonEntry(zip, "folders.json"));
+  const insightsEntry = await readOptionalTextEntry(zip, INSIGHTS_FILE);
 
   if (manifest.documents !== documents.length || manifest.folders !== folders.length) {
     throw new Error("Bundle manifest does not match the included registry.");
@@ -101,6 +109,15 @@ export async function importKnowledgeBase(buffer: Buffer): Promise<KnowledgeImpo
       JSON.stringify(folders, null, 2),
       "utf8",
     );
+
+    if (insightsEntry) {
+      const insights = validateInsights(parseJson(insightsEntry, INSIGHTS_FILE));
+      await fs.writeFile(
+        path.join(nextRoot, INSIGHTS_FILE),
+        JSON.stringify(insights, null, 2),
+        "utf8",
+      );
+    }
 
     for (const document of documents) {
       const documentRoot = path.join(nextRoot, "documents", document.id);
@@ -195,6 +212,18 @@ async function readOptionalTextEntry(
 ): Promise<string | null> {
   const entry = zip.file(entryName);
   return entry ? entry.async("string") : null;
+}
+
+async function readOptionalLocalText(file: string): Promise<string | null> {
+  try {
+    return await fs.readFile(file, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+
+    throw error;
+  }
 }
 
 function parseJson(content: string, entryName: string): unknown {
@@ -323,6 +352,36 @@ function validateDocIndex(value: unknown): DocIndex {
     tags: getStringArray(value.tags, "index.tags"),
     chunks: value.chunks.map((chunk, index) => validateChunk(chunk, `index.chunks[${index}]`)),
   };
+}
+
+function validateInsights(value: unknown): unknown {
+  if (!isRecord(value)) {
+    throw new Error(`${INSIGHTS_FILE} must contain an object.`);
+  }
+
+  return {
+    folderSettings: validateRecordArray(value.folderSettings, "insights.folderSettings"),
+    documentInsights: validateRecordArray(value.documentInsights, "insights.documentInsights"),
+    folderInsights: validateRecordArray(value.folderInsights, "insights.folderInsights"),
+  };
+}
+
+function validateRecordArray(value: unknown, label: string): Record<string, unknown>[] {
+  if (value === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} must be an array.`);
+  }
+
+  return value.map((item, index) => {
+    if (!isRecord(item)) {
+      throw new Error(`${label}[${index}] must contain an object.`);
+    }
+
+    return item;
+  });
 }
 
 function validateChunk(value: unknown, label: string): DocIndex["chunks"][number] {

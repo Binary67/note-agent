@@ -1,4 +1,4 @@
-import { ChartNoAxesColumn, CircleHelp, FolderOpen, MessageSquareText, Settings, type LucideIcon } from "lucide-react";
+import { ChartNoAxesColumn, CircleHelp, FolderOpen, Lightbulb, MessageSquareText, Settings, type LucideIcon } from "lucide-react";
 import { SidebarItem } from "@/app/components/ui";
 import type { ViewKey } from "@/app/types";
 
@@ -9,6 +9,7 @@ const navigationItems: Array<{
 }> = [
   { label: "Knowledge", icon: FolderOpen, view: "ingestion" },
   { label: "Chat", icon: MessageSquareText, view: "chat" },
+  { label: "Insights", icon: Lightbulb, view: "insights" },
   { label: "Analytics", icon: ChartNoAxesColumn, view: "analytics" },
 ];
 

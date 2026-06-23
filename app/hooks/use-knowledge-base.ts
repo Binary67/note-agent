@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { useDocumentActions } from "@/app/hooks/knowledge-base/use-document-actions";
+import { useInsights } from "@/app/hooks/knowledge-base/use-insights";
 import { useKnowledgeBaseDerived } from "@/app/hooks/knowledge-base/use-knowledge-base-derived";
 import { useKnowledgeChat } from "@/app/hooks/knowledge-base/use-knowledge-chat";
 import { useKnowledgeSelection } from "@/app/hooks/knowledge-base/use-knowledge-selection";
@@ -156,6 +157,20 @@ export function useKnowledgeBase() {
     selectedFolderIds,
     selectedDocumentIds,
     setActiveView,
+  });
+
+  const {
+    insights,
+    isLoadingInsights,
+    isRunningInsights,
+    insightsError,
+    refreshInsights,
+    generateInsights,
+    updateFolderInstruction,
+  } = useInsights({
+    activeView,
+    indexedDocumentsLength: indexedDocuments.length,
+    isBusy: isUploading || isIngesting || stats.ingesting > 0 || isAnswering,
   });
 
   const {
@@ -386,6 +401,10 @@ export function useKnowledgeBase() {
     setChatInput,
     messages,
     isAnswering,
+    insights,
+    isLoadingInsights,
+    isRunningInsights,
+    insightsError,
     renameTarget,
     setRenameTarget,
     deleteTarget,
@@ -402,6 +421,9 @@ export function useKnowledgeBase() {
     readiness,
     indexSteps,
     messagesEndRef,
+    refreshInsights,
+    generateInsights,
+    updateFolderInstruction,
     handleInputChange,
     handleDrop,
     startIngestion,

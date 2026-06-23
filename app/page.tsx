@@ -5,6 +5,7 @@ import { ChatView } from "@/app/components/chat-view";
 import { DeleteDialog } from "@/app/components/delete-dialog";
 import { ImportDialog } from "@/app/components/import-dialog";
 import { IngestionView } from "@/app/components/ingestion-view";
+import { InsightsView } from "@/app/components/insights-view";
 import { RenameDialog } from "@/app/components/rename-dialog";
 import { Sidebar } from "@/app/components/sidebar";
 import { useKnowledgeBase } from "@/app/hooks/use-knowledge-base";
@@ -14,6 +15,8 @@ export default function Home() {
   const pageTitle =
     kb.activeView === "chat"
       ? "Chat"
+      : kb.activeView === "insights"
+        ? "Insights"
       : kb.activeView === "analytics"
         ? "Analytics"
         : "Knowledge";
@@ -67,6 +70,15 @@ export default function Home() {
             />
           ) : kb.activeView === "analytics" ? (
             <AnalyticsView />
+          ) : kb.activeView === "insights" ? (
+            <InsightsView
+              insights={kb.insights}
+              isLoading={kb.isLoadingInsights}
+              isRunning={kb.isRunningInsights}
+              error={kb.insightsError}
+              onRefresh={kb.generateInsights}
+              onUpdateInstruction={kb.updateFolderInstruction}
+            />
           ) : (
             <IngestionView
               uploads={kb.uploads}

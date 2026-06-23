@@ -1,6 +1,6 @@
 export type UploadStatus = "Ready" | "Ingesting" | "Indexed" | "Error";
 export type UploadProgressStatus = "active" | "complete" | "error";
-export type ViewKey = "ingestion" | "chat" | "analytics";
+export type ViewKey = "ingestion" | "chat" | "insights" | "analytics";
 
 export type UploadItem = {
   id: string;
@@ -77,4 +77,51 @@ export type ChatResponse = {
   answer: string;
   mode: "selected" | "retrieved" | "folder" | "mixed";
   documents: ChatDocument[];
+};
+export type InsightInstructionSource = "suggested" | "custom";
+export type InsightStatus = "pending" | "stale" | "fresh";
+export type InsightSection = {
+  title: string;
+  items: string[];
+};
+export type FolderInsightItem = {
+  text: string;
+  documentId?: string;
+  documentName?: string;
+};
+export type FolderInsightSection = {
+  title: string;
+  items: FolderInsightItem[];
+};
+export type DocumentInsightView = {
+  documentId: string;
+  documentName: string;
+  status: InsightStatus;
+  generatedAt: string | null;
+  overview: string;
+  sections: InsightSection[];
+};
+export type FolderInsightView = {
+  folder: FolderRecord;
+  documentCount: number;
+  instruction: string;
+  instructionSource: InsightInstructionSource | null;
+  suggestionStatus: "pending" | "ready";
+  status: InsightStatus;
+  generatedAt: string | null;
+  overview: string;
+  sections: FolderInsightSection[];
+  documents: DocumentInsightView[];
+};
+export type InsightsResponse = {
+  folders: FolderInsightView[];
+  pendingJobs: number;
+};
+export type InsightsRunResponse = {
+  started: boolean;
+  changed: boolean;
+  suggestionsGenerated: number;
+  documentInsightsGenerated: number;
+  folderInsightsGenerated: number;
+  pendingJobs: number;
 };
