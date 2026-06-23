@@ -5,19 +5,19 @@ import { listDocuments, updateDocument } from "@/lib/storage";
 export async function POST() {
   const config = getConfig();
   const docs = await listDocuments();
-  const ready = docs.filter((doc) => doc.status === "Ready");
+  const queued = docs.filter((doc) => doc.status === "Ready" || doc.status === "Error");
 
-  if (ready.length === 0) {
-    return Response.json({ error: "No ready documents to ingest." }, { status: 400 });
+  if (queued.length === 0) {
+    return Response.json({ error: "No documents to index." }, { status: 400 });
   }
 
-  for (const doc of ready) {
+  for (const doc of queued) {
     await updateDocument(doc.id, { status: "Ingesting" });
   }
 
-  void runIngestion(ready.map((doc) => doc.id), config.ingestion.concurrency);
+  void runIngestion(queued.map((doc) => doc.id), config.ingestion.concurrency);
 
-  return Response.json({ started: ready.length });
+  return Response.json({ started: queued.length });
 }
 
 async function runIngestion(ids: string[], concurrency: number): Promise<void> {

@@ -119,6 +119,7 @@ export function IngestionView({
   const uploadProgressPercent = Math.min(100, Math.max(0, Math.round(uploadProgress?.percent ?? 0)));
   const indexedPercent =
     stats.total === 0 ? 0 : Math.round((stats.indexed / stats.total) * 100);
+  const indexableCount = stats.ready + stats.errors;
   const latestUploadTime = uploads[0]?.uploadedAt ?? "Not yet";
   const indexMetrics = [
     { label: "Indexed files", value: `${stats.indexed}/${stats.total}` },
@@ -472,13 +473,15 @@ export function IngestionView({
           <div className="shrink-0 border-t border-line bg-surface p-4">
             <PrimaryButton
               className="w-full"
-              disabled={stats.ready === 0 || isIngesting || unassignedReadyCount > 0}
+              disabled={indexableCount === 0 || isIngesting || unassignedReadyCount > 0}
               onClick={onStartIngestion}
             >
               {isIngesting
                 ? "Indexing..."
                 : stats.ready > 0
                   ? "Start Indexing"
+                  : stats.errors > 0
+                    ? "Retry Indexing"
                   : stats.indexed > 0
                     ? "Indexed"
                     : "Start Indexing"}

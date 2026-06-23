@@ -239,7 +239,7 @@ export function useKnowledgeBase() {
 
   const startIngestion = useCallback(async () => {
     setIsIngesting(true);
-    setNotice("Ingestion started. Processing ready documents...");
+    setNotice("Ingestion started. Processing queued documents...");
 
     try {
       await parseJson<IngestResponse>(await fetch("/api/ingest", { method: "POST" }));

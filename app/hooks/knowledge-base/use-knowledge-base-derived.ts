@@ -136,7 +136,7 @@ export function useKnowledgeBaseDerived({
       return {
         label: "Review",
         title: `${stats.errors} indexing issue${stats.errors === 1 ? "" : "s"}`,
-        description: "Remove failed documents or upload a clean file before retrying.",
+        description: "Retry failed documents or remove files that keep failing.",
         tone: "danger" as const,
       };
     }
