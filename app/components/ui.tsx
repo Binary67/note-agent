@@ -97,6 +97,7 @@ export function Modal({
   onClose,
   icon: Icon,
   title,
+  className,
   children,
   footer,
 }: {
@@ -104,6 +105,7 @@ export function Modal({
   onClose: () => void;
   icon?: LucideIcon;
   title: string;
+  className?: string;
   children?: ReactNode;
   footer?: ReactNode;
 }) {
@@ -143,7 +145,10 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="modal-sheet relative w-full max-w-[360px] rounded-[12px] border border-line bg-surface p-4 shadow-[0_1px_2px_rgba(0,0,0,0.08),0_24px_60px_rgba(0,0,0,0.18)]"
+        className={cx(
+          "modal-sheet relative w-full rounded-[12px] border border-line bg-surface p-4 shadow-[0_1px_2px_rgba(0,0,0,0.08),0_24px_60px_rgba(0,0,0,0.18)]",
+          className ?? "max-w-[360px]",
+        )}
       >
         <div className="flex items-start gap-3">
           {Icon && (

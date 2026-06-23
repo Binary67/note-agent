@@ -7,9 +7,9 @@ const navigationItems: Array<{
   icon: LucideIcon;
   view?: ViewKey;
 }> = [
-  { label: "Knowledge", icon: FolderOpen, view: "ingestion" },
-  { label: "Chat", icon: MessageSquareText, view: "chat" },
   { label: "Insights", icon: Lightbulb, view: "insights" },
+  { label: "Chat", icon: MessageSquareText, view: "chat" },
+  { label: "Knowledge", icon: FolderOpen, view: "ingestion" },
   { label: "Analytics", icon: ChartNoAxesColumn, view: "analytics" },
 ];
 
