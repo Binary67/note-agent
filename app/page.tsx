@@ -73,11 +73,11 @@ export default function Home() {
           ) : kb.activeView === "insights" ? (
             <InsightsView
               insights={kb.insights}
+              progress={kb.insightProgress}
               isLoading={kb.isLoadingInsights}
               isRunning={kb.isRunningInsights}
               error={kb.insightsError}
               onRefresh={kb.generateInsights}
-              onUpdateInstruction={kb.updateFolderInstruction}
             />
           ) : (
             <IngestionView

@@ -120,7 +120,9 @@ export function IngestionView({
   const indexedPercent =
     stats.total === 0 ? 0 : Math.round((stats.indexed / stats.total) * 100);
   const indexableCount = stats.ready + stats.errors;
-  const latestUploadTime = uploads[0]?.uploadedAt ?? "Not yet";
+  const latestUploadDate = uploads[0]
+    ? formatUploadDate(uploads[0].uploadedAt)
+    : "Not yet";
   const indexMetrics = [
     { label: "Indexed files", value: `${stats.indexed}/${stats.total}` },
     { label: "Ready queue", value: stats.ready.toLocaleString() },
@@ -300,7 +302,9 @@ export function IngestionView({
                         {upload.status}
                       </StatusPill>
                     </span>
-                    <span className="hidden text-center text-muted md:block">{upload.uploadedAt}</span>
+                    <span className="hidden text-center text-muted md:block">
+                      {formatUploadDate(upload.uploadedAt)}
+                    </span>
                     <div className="flex items-center justify-end gap-1">
                       <button
                         className="flex size-8 items-center justify-center rounded-control text-subtle transition hover:bg-surface-muted hover:text-ink"
@@ -416,7 +420,7 @@ export function IngestionView({
                 <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-subtle">
                   Index Details
                 </h4>
-                <span className="text-xs text-muted">{latestUploadTime}</span>
+                <span className="text-xs text-muted">{latestUploadDate}</span>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {indexMetrics.map((metric) => (
@@ -459,7 +463,7 @@ export function IngestionView({
                             {stem}
                           </p>
                           <p className="text-xs text-muted">
-                            {upload.status} · {upload.uploadedAt}
+                            {upload.status} · {formatUploadDate(upload.uploadedAt)}
                           </p>
                         </div>
                       </div>
@@ -532,4 +536,24 @@ export function IngestionView({
       </InspectorPanel>
     </div>
   );
+}
+
+function formatUploadDate(value: string): string {
+  const datePrefix = value.match(/^(\d{4}-\d{2}-\d{2})/);
+
+  if (datePrefix) {
+    return datePrefix[1];
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }

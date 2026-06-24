@@ -78,20 +78,26 @@ export type ChatResponse = {
   mode: "selected" | "retrieved" | "folder" | "mixed";
   documents: ChatDocument[];
 };
-export type InsightInstructionSource = "suggested" | "custom";
 export type InsightStatus = "pending" | "stale" | "fresh";
-export type InsightSection = {
-  title: string;
-  items: string[];
-};
-export type FolderInsightItem = {
+export type InsightCitation = {
+  marker: string;
   text: string;
-  documentId?: string;
-  documentName?: string;
 };
-export type FolderInsightSection = {
+export type InsightWebCitation = {
   title: string;
-  items: FolderInsightItem[];
+  url: string;
+};
+export type InsightWebContext = {
+  summary: string;
+  citations: InsightWebCitation[];
+};
+export type DocumentTakeaway = {
+  id: string;
+  title: string;
+  summary: string;
+  detail: string;
+  citations: InsightCitation[];
+  webContext: InsightWebContext | null;
 };
 export type DocumentInsightView = {
   documentId: string;
@@ -99,29 +105,39 @@ export type DocumentInsightView = {
   status: InsightStatus;
   generatedAt: string | null;
   overview: string;
-  sections: InsightSection[];
+  takeaways: DocumentTakeaway[];
 };
 export type FolderInsightView = {
   folder: FolderRecord;
   documentCount: number;
-  instruction: string;
-  instructionSource: InsightInstructionSource | null;
-  suggestionStatus: "pending" | "ready";
+  takeawayCount: number;
   status: InsightStatus;
   generatedAt: string | null;
   overview: string;
-  sections: FolderInsightSection[];
   documents: DocumentInsightView[];
 };
 export type InsightsResponse = {
   folders: FolderInsightView[];
   pendingJobs: number;
 };
+export type InsightGenerationProgressStatus = "active" | "complete" | "error";
+export type InsightGenerationProgress = {
+  jobId: string;
+  status: InsightGenerationProgressStatus;
+  percent: number;
+  processedDocuments: number;
+  totalDocuments: number;
+  currentDocumentName: string | null;
+  label: string;
+  detail: string | null;
+  updatedAt: number;
+};
+export type InsightsProgressResponse = {
+  progress: InsightGenerationProgress | null;
+};
 export type InsightsRunResponse = {
   started: boolean;
   changed: boolean;
-  suggestionsGenerated: number;
   documentInsightsGenerated: number;
-  folderInsightsGenerated: number;
   pendingJobs: number;
 };

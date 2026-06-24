@@ -3,13 +3,15 @@ import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { OpenAI } from "openai";
+import type { Response as OpenAIResponse } from "openai/resources/responses/responses";
 import type {
-  FolderInsightItem,
-  FolderInsightSection,
+  DocumentTakeaway,
   FolderInsightView,
-  InsightInstructionSource,
-  InsightSection,
+  InsightGenerationProgress,
+  InsightCitation,
   InsightStatus,
+  InsightWebCitation,
+  InsightWebContext,
   InsightsResponse,
   InsightsRunResponse,
 } from "@/app/types";
@@ -26,21 +28,14 @@ import {
 
 const ROOT = path.join(process.cwd(), "data");
 const INSIGHTS_PATH = path.join(ROOT, "insights.json");
-const MAX_BACKGROUND_MODEL_CALLS = 2;
+const INSIGHT_SCHEMA_VERSION = 3;
 const MAX_DOCUMENT_TEXT_CHARS = 16000;
-const MAX_FOLDER_DOCUMENTS_FOR_SUGGESTION = 8;
-
-type FolderInsightSetting = {
-  folderId: string;
-  instruction: string;
-  instructionSource: InsightInstructionSource;
-  suggestedInstruction: string;
-  suggestionContextHash: string;
-  suggestionGeneratedAt: string;
-  updatedAt: string;
-};
+const MAX_PROGRESS_AGE_MS = 30 * 60 * 1000;
+const LEARNING_BRIEF_INSTRUCTION =
+  "Extract the most useful learning brief from each document: top key takeaways, concise summaries, detailed elaboration, document evidence, and richer web-backed expansion.";
 
 type DocumentInsightRecord = {
+  schemaVersion: number;
   documentId: string;
   folderId: string;
   documentName: string;
@@ -48,22 +43,27 @@ type DocumentInsightRecord = {
   documentHash: string;
   generatedAt: string;
   overview: string;
-  sections: InsightSection[];
-};
-
-type FolderInsightRecord = {
-  folderId: string;
-  instructionHash: string;
-  generatedAt: string;
-  overview: string;
-  sections: FolderInsightSection[];
+  takeaways: DocumentTakeaway[];
 };
 
 type InsightStore = {
-  folderSettings: FolderInsightSetting[];
   documentInsights: DocumentInsightRecord[];
-  folderInsights: FolderInsightRecord[];
 };
+
+type InsightProgressUpdate = Partial<
+  Pick<
+    InsightGenerationProgress,
+    | "status"
+    | "percent"
+    | "processedDocuments"
+    | "totalDocuments"
+    | "currentDocumentName"
+    | "label"
+    | "detail"
+  >
+>;
+
+const insightProgress = new Map<string, InsightGenerationProgress>();
 
 type IndexedFolderDocument = {
   record: DocumentRecord;
@@ -74,18 +74,93 @@ type IndexedFolderDocument = {
 type IndexedFolderContext = {
   folder: FolderRecord;
   documents: IndexedFolderDocument[];
-  suggestionContextHash: string;
+};
+
+type InsightGenerationTarget = {
+  context: IndexedFolderContext;
+  document: IndexedFolderDocument;
 };
 
 type ParsedDocumentInsight = {
   overview: string;
-  sections: InsightSection[];
+  takeaways: DocumentTakeaway[];
 };
 
-type ParsedFolderInsight = {
-  overview: string;
-  sections: FolderInsightSection[];
-};
+function clampPercent(percent: number): number {
+  return Math.min(100, Math.max(0, percent));
+}
+
+function progressPercent(processedDocuments: number, totalDocuments: number): number {
+  if (totalDocuments === 0) {
+    return 100;
+  }
+
+  return Math.round((processedDocuments / totalDocuments) * 100);
+}
+
+function progressDetail(processedDocuments: number, totalDocuments: number): string {
+  return `${processedDocuments.toLocaleString()} of ${totalDocuments.toLocaleString()} documents processed`;
+}
+
+function pruneInsightProgress(): void {
+  const cutoff = Date.now() - MAX_PROGRESS_AGE_MS;
+
+  for (const [jobId, progress] of insightProgress) {
+    if (progress.updatedAt < cutoff) {
+      insightProgress.delete(jobId);
+    }
+  }
+}
+
+export function beginInsightGenerationProgress(jobId: string): void {
+  pruneInsightProgress();
+  insightProgress.set(jobId, {
+    jobId,
+    status: "active",
+    percent: 0,
+    processedDocuments: 0,
+    totalDocuments: 0,
+    currentDocumentName: null,
+    label: "Preparing generation",
+    detail: null,
+    updatedAt: Date.now(),
+  });
+}
+
+function updateInsightGenerationProgress(
+  jobId: string | undefined,
+  update: InsightProgressUpdate,
+): void {
+  if (!jobId) {
+    return;
+  }
+
+  const existing = insightProgress.get(jobId) ?? {
+    jobId,
+    status: "active" as const,
+    percent: 0,
+    processedDocuments: 0,
+    totalDocuments: 0,
+    currentDocumentName: null,
+    label: "Preparing generation",
+    detail: null,
+    updatedAt: Date.now(),
+  };
+
+  insightProgress.set(jobId, {
+    ...existing,
+    ...update,
+    percent: clampPercent(update.percent ?? existing.percent),
+    updatedAt: Date.now(),
+  });
+}
+
+export function getInsightGenerationProgress(
+  jobId: string,
+): InsightGenerationProgress | null {
+  pruneInsightProgress();
+  return insightProgress.get(jobId) ?? null;
+}
 
 function getClient(): OpenAI {
   const { azure } = getConfig();
@@ -112,22 +187,14 @@ async function readStore(): Promise<InsightStore> {
     const parsed = JSON.parse(content) as Partial<InsightStore>;
 
     return {
-      folderSettings: Array.isArray(parsed.folderSettings)
-        ? parsed.folderSettings
-        : [],
       documentInsights: Array.isArray(parsed.documentInsights)
         ? parsed.documentInsights
-        : [],
-      folderInsights: Array.isArray(parsed.folderInsights)
-        ? parsed.folderInsights
         : [],
     };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return {
-        folderSettings: [],
         documentInsights: [],
-        folderInsights: [],
       };
     }
 
@@ -155,23 +222,6 @@ function documentHash(index: DocIndex): string {
       entities: index.entities,
       tags: index.tags,
       chunks: index.chunks.map((chunk) => chunk.text),
-    }),
-  );
-}
-
-function folderSuggestionContextHash(
-  folder: FolderRecord,
-  documents: IndexedFolderDocument[],
-): string {
-  return hashText(
-    JSON.stringify({
-      folderName: folder.name,
-      documents: documents.map(({ record, index }) => ({
-        name: record.name,
-        summary: index.summary,
-        tags: index.tags,
-        entities: index.entities,
-      })),
     }),
   );
 }
@@ -218,17 +268,9 @@ async function loadIndexedFolderContexts(): Promise<IndexedFolderContext[]> {
       return {
         folder,
         documents: folderDocuments,
-        suggestionContextHash: folderSuggestionContextHash(folder, folderDocuments),
       };
     })
     .filter((context) => context.documents.length > 0);
-}
-
-function getFolderSetting(
-  store: InsightStore,
-  folderId: string,
-): FolderInsightSetting | null {
-  return store.folderSettings.find((setting) => setting.folderId === folderId) ?? null;
 }
 
 function getDocumentInsight(
@@ -238,28 +280,6 @@ function getDocumentInsight(
   return (
     store.documentInsights.find((insight) => insight.documentId === documentId) ?? null
   );
-}
-
-function getFolderInsight(
-  store: InsightStore,
-  folderId: string,
-): FolderInsightRecord | null {
-  return store.folderInsights.find((insight) => insight.folderId === folderId) ?? null;
-}
-
-function upsertFolderSetting(
-  store: InsightStore,
-  setting: FolderInsightSetting,
-): void {
-  const index = store.folderSettings.findIndex(
-    (item) => item.folderId === setting.folderId,
-  );
-
-  if (index === -1) {
-    store.folderSettings.push(setting);
-  } else {
-    store.folderSettings[index] = setting;
-  }
 }
 
 function upsertDocumentInsight(
@@ -277,74 +297,32 @@ function upsertDocumentInsight(
   }
 }
 
-function upsertFolderInsight(
-  store: InsightStore,
-  insight: FolderInsightRecord,
-): void {
-  const index = store.folderInsights.findIndex(
-    (item) => item.folderId === insight.folderId,
-  );
-
-  if (index === -1) {
-    store.folderInsights.push(insight);
-  } else {
-    store.folderInsights[index] = insight;
-  }
-}
-
-function shouldSuggestInstruction(
-  setting: FolderInsightSetting | null,
-  context: IndexedFolderContext,
-): boolean {
+function hasCurrentInsightContent(insight: DocumentInsightRecord): boolean {
   return (
-    !setting ||
-    (setting.instructionSource === "suggested" &&
-      setting.suggestionContextHash !== context.suggestionContextHash)
+    insight.schemaVersion === INSIGHT_SCHEMA_VERSION &&
+    insight.takeaways.length > 0 &&
+    insight.takeaways.every(
+      (takeaway) =>
+        Boolean(takeaway.title && takeaway.summary && takeaway.detail) &&
+        Boolean(takeaway.webContext?.summary),
+    )
   );
 }
 
 function getDocumentStatus(
   document: IndexedFolderDocument,
-  setting: FolderInsightSetting | null,
   insight: DocumentInsightRecord | null,
 ): InsightStatus {
-  if (!setting || !insight) {
+  if (!insight) {
     return "pending";
   }
 
   return insight.folderId === document.record.folderId &&
-    insight.instructionHash === instructionHash(setting.instruction) &&
-    insight.documentHash === document.documentHash
+    insight.instructionHash === instructionHash(LEARNING_BRIEF_INSTRUCTION) &&
+    insight.documentHash === document.documentHash &&
+    hasCurrentInsightContent(insight)
     ? "fresh"
     : "stale";
-}
-
-function getFolderStatus(
-  context: IndexedFolderContext,
-  setting: FolderInsightSetting | null,
-  folderInsight: FolderInsightRecord | null,
-  documentInsights: DocumentInsightRecord[],
-): InsightStatus {
-  if (!setting || !folderInsight) {
-    return "pending";
-  }
-
-  const currentInstructionHash = instructionHash(setting.instruction);
-
-  if (folderInsight.instructionHash !== currentInstructionHash) {
-    return "stale";
-  }
-
-  if (documentInsights.length !== context.documents.length) {
-    return "pending";
-  }
-
-  const folderGeneratedAt = Date.parse(folderInsight.generatedAt);
-  const hasNewerDocumentInsight = documentInsights.some(
-    (insight) => Date.parse(insight.generatedAt) > folderGeneratedAt,
-  );
-
-  return hasNewerDocumentInsight ? "stale" : "fresh";
 }
 
 function countPendingJobs(
@@ -352,22 +330,9 @@ function countPendingJobs(
   store: InsightStore,
 ): number {
   let count = 0;
+  const currentInstructionHash = instructionHash(LEARNING_BRIEF_INSTRUCTION);
 
   for (const context of contexts) {
-    const setting = getFolderSetting(store, context.folder.id);
-
-    if (shouldSuggestInstruction(setting, context)) {
-      count += 1;
-      continue;
-    }
-
-    if (!setting) {
-      continue;
-    }
-
-    const currentInstructionHash = instructionHash(setting.instruction);
-    let hasStaleDocument = false;
-
     for (const document of context.documents) {
       const insight = getDocumentInsight(store, document.record.id);
 
@@ -375,21 +340,8 @@ function countPendingJobs(
         !insight ||
         insight.folderId !== context.folder.id ||
         insight.instructionHash !== currentInstructionHash ||
-        insight.documentHash !== document.documentHash
-      ) {
-        count += 1;
-        hasStaleDocument = true;
-      }
-    }
-
-    if (!hasStaleDocument) {
-      const folderInsight = getFolderInsight(store, context.folder.id);
-      const documentInsights = context.documents
-        .map((document) => getDocumentInsight(store, document.record.id))
-        .filter((insight): insight is DocumentInsightRecord => insight !== null);
-
-      if (
-        getFolderStatus(context, setting, folderInsight, documentInsights) !== "fresh"
+        insight.documentHash !== document.documentHash ||
+        !hasCurrentInsightContent(insight)
       ) {
         count += 1;
       }
@@ -413,142 +365,194 @@ function normalizeText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function normalizeSections(value: unknown): InsightSection[] {
+function normalizeDocumentCitations(value: unknown): InsightCitation[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
   return value
-    .map((section) => {
-      if (typeof section !== "object" || section === null || Array.isArray(section)) {
+    .map((citation, index) => {
+      if (
+        typeof citation !== "object" ||
+        citation === null ||
+        Array.isArray(citation)
+      ) {
         return null;
       }
 
-      const record = section as Record<string, unknown>;
-      const title = normalizeText(record.title);
-      const items = Array.isArray(record.items)
-        ? record.items.map(normalizeText).filter(Boolean).slice(0, 6)
-        : [];
+      const record = citation as Record<string, unknown>;
+      const marker =
+        normalizeText(record.marker).replace(/^\[|\]$/g, "") || `D${index + 1}`;
+      const text = normalizeText(record.text);
 
-      if (!title || items.length === 0) {
+      if (!text) {
         return null;
       }
 
-      return { title, items };
+      return { marker, text };
     })
-    .filter((section): section is InsightSection => section !== null)
-    .slice(0, 5);
+    .filter((citation): citation is InsightCitation => citation !== null)
+    .slice(0, 4);
 }
 
-function normalizeFolderSections(
+function normalizeTakeaways(
   value: unknown,
-  documentNameById: Map<string, string>,
-): FolderInsightSection[] {
+): Array<Omit<DocumentTakeaway, "webContext">> {
   if (!Array.isArray(value)) {
     return [];
   }
 
   return value
-    .map((section) => {
-      if (typeof section !== "object" || section === null || Array.isArray(section)) {
+    .map((takeaway, index) => {
+      if (
+        typeof takeaway !== "object" ||
+        takeaway === null ||
+        Array.isArray(takeaway)
+      ) {
         return null;
       }
 
-      const record = section as Record<string, unknown>;
+      const record = takeaway as Record<string, unknown>;
       const title = normalizeText(record.title);
-      const items = Array.isArray(record.items)
-        ? record.items
-            .map((item): FolderInsightItem | null => {
-              if (typeof item === "string") {
-                return { text: item.trim() };
-              }
+      const summary = normalizeText(record.summary);
+      const detail = normalizeText(record.detail);
 
-              if (
-                typeof item !== "object" ||
-                item === null ||
-                Array.isArray(item)
-              ) {
-                return null;
-              }
-
-              const itemRecord = item as Record<string, unknown>;
-              const text = normalizeText(itemRecord.text);
-              const documentId = normalizeText(itemRecord.documentId);
-
-              if (!text) {
-                return null;
-              }
-
-              if (!documentId || !documentNameById.has(documentId)) {
-                return { text };
-              }
-
-              return {
-                text,
-                documentId,
-                documentName: documentNameById.get(documentId),
-              };
-            })
-            .filter((item): item is FolderInsightItem => item !== null)
-            .slice(0, 8)
-        : [];
-
-      if (!title || items.length === 0) {
+      if (!title || !summary || !detail) {
         return null;
       }
 
-      return { title, items };
+      return {
+        id: `t${index + 1}`,
+        title,
+        summary,
+        detail,
+        citations: normalizeDocumentCitations(record.citations),
+      };
     })
-    .filter((section): section is FolderInsightSection => section !== null)
-    .slice(0, 5);
+    .filter(
+      (takeaway): takeaway is Omit<DocumentTakeaway, "webContext"> =>
+        takeaway !== null,
+    )
+    .slice(0, 6);
 }
 
-async function generateSuggestedInstruction(
-  context: IndexedFolderContext,
-): Promise<string> {
-  const { azure } = getConfig();
-  const client = getClient();
-  const documentContext = context.documents
-    .slice(0, MAX_FOLDER_DOCUMENTS_FOR_SUGGESTION)
-    .map(
-      ({ record, index }) =>
-        `- ${record.name}\n  Summary: ${index.summary}\n  Tags: ${index.tags.join(", ")}`,
-    )
-    .join("\n");
-
-  const response = await client.chat.completions.create({
-    model: azure.chatDeployment,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content:
-          "You propose editable folder-level instructions for generating personal knowledge-base insights. " +
-          "Infer the likely folder purpose from its name and document metadata. " +
-          "Do not mention that this is inferred. Respond with strict JSON: " +
-          '{"instruction":"one concise instruction paragraph"}',
-      },
-      {
-        role: "user",
-        content: `Folder name: ${context.folder.name}\n\nDocuments:\n${documentContext}`,
-      },
-    ],
-  });
-
-  const raw = response.choices[0]?.message?.content ?? "{}";
-  const parsed = parseJsonObject(raw);
-  const instruction = normalizeText(parsed.instruction);
-
-  if (!instruction) {
-    throw new Error("The model did not return a folder instruction.");
+function normalizeWebCitations(value: unknown): InsightWebCitation[] {
+  if (!Array.isArray(value)) {
+    return [];
   }
 
-  return instruction;
+  return value
+    .map((citation) => {
+      if (
+        typeof citation !== "object" ||
+        citation === null ||
+        Array.isArray(citation)
+      ) {
+        return null;
+      }
+
+      const record = citation as Record<string, unknown>;
+      const title = normalizeText(record.title);
+      const url = normalizeText(record.url);
+
+      if (!url) {
+        return null;
+      }
+
+      return { title: title || url, url };
+    })
+    .filter((citation): citation is InsightWebCitation => citation !== null)
+    .slice(0, 6);
+}
+
+function dedupeWebCitations(
+  citations: InsightWebCitation[],
+): InsightWebCitation[] {
+  const seen = new Set<string>();
+  const unique: InsightWebCitation[] = [];
+
+  for (const citation of citations) {
+    if (seen.has(citation.url)) {
+      continue;
+    }
+
+    seen.add(citation.url);
+    unique.push(citation);
+  }
+
+  return unique.slice(0, 6);
+}
+
+function collectResponseWebCitations(
+  response: OpenAIResponse,
+): InsightWebCitation[] {
+  const citations: InsightWebCitation[] = [];
+
+  for (const item of response.output) {
+    if (item.type !== "message") {
+      continue;
+    }
+
+    for (const content of item.content) {
+      if (content.type !== "output_text") {
+        continue;
+      }
+
+      for (const annotation of content.annotations) {
+        if (annotation.type === "url_citation") {
+          citations.push({
+            title: annotation.title || annotation.url,
+            url: annotation.url,
+          });
+        }
+      }
+    }
+  }
+
+  return dedupeWebCitations(citations);
+}
+
+function normalizeWebContexts(
+  value: unknown,
+  takeaways: Array<Omit<DocumentTakeaway, "webContext">>,
+  fallbackCitations: InsightWebCitation[],
+): Map<string, InsightWebContext> {
+  const knownIds = new Set(takeaways.map((takeaway) => takeaway.id));
+  const contexts = new Map<string, InsightWebContext>();
+
+  if (!Array.isArray(value)) {
+    return contexts;
+  }
+
+  for (const item of value) {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      continue;
+    }
+
+    const record = item as Record<string, unknown>;
+    const takeawayId = normalizeText(record.takeawayId);
+    const summary = normalizeText(record.summary);
+
+    if (!knownIds.has(takeawayId) || !summary) {
+      continue;
+    }
+
+    const citations = normalizeWebCitations(record.citations);
+
+    contexts.set(takeawayId, {
+      summary,
+      citations: dedupeWebCitations(
+        citations.length > 0 ? citations : fallbackCitations,
+      ),
+    });
+  }
+
+  return contexts;
 }
 
 async function generateDocumentInsight(
   document: IndexedFolderDocument,
-  instruction: string,
+  folderName: string,
 ): Promise<ParsedDocumentInsight> {
   const { azure } = getConfig();
   const client = getClient();
@@ -565,15 +569,19 @@ async function generateDocumentInsight(
       {
         role: "system",
         content:
-          "You generate cached insights for one document in a personal knowledge base. " +
-          "Follow the folder instruction exactly. Keep insights concrete and useful. " +
+          "You generate a learning brief for one document in a personal knowledge base. " +
+          "Extract 3-6 concrete, non-overlapping key takeaways. " +
+          "Each takeaway needs a short title, a concise summary, and a detailed elaboration grounded only in the document. " +
+          "Use unique inline document citation markers like [D1], [D2], and [D3] in each takeaway detail, and include matching short evidence snippets in citations. " +
+          "Do not add web-backed expansion in this step. " +
           "Respond with strict JSON: " +
-          '{"overview":"one sentence","sections":[{"title":"section name","items":["2-6 concise items"]}]}.',
+          '{"overview":"one sentence","takeaways":[{"title":"takeaway title","summary":"one sentence","detail":"2-4 short paragraphs with [D1] markers","citations":[{"marker":"D1","text":"short document evidence"}]}]}.',
       },
       {
         role: "user",
         content:
-          `Folder instruction:\n${instruction}\n\n` +
+          `Learning brief goal:\n${LEARNING_BRIEF_INSTRUCTION}\n\n` +
+          `Folder name: ${folderName}\n` +
           `Document name: ${document.record.name}\n` +
           `Existing summary: ${document.index.summary}\n` +
           `Tags: ${document.index.tags.join(", ")}\n\n` +
@@ -585,64 +593,125 @@ async function generateDocumentInsight(
   const raw = response.choices[0]?.message?.content ?? "{}";
   const parsed = parseJsonObject(raw);
   const overview = normalizeText(parsed.overview);
-  const sections = normalizeSections(parsed.sections);
+  const takeawaysWithoutWeb = normalizeTakeaways(parsed.takeaways);
 
-  if (!overview && sections.length === 0) {
+  if (!overview && takeawaysWithoutWeb.length === 0) {
     throw new Error("The model did not return document insights.");
   }
 
-  return { overview, sections };
-}
-
-async function generateFolderInsight(
-  context: IndexedFolderContext,
-  documentInsights: DocumentInsightRecord[],
-  instruction: string,
-): Promise<ParsedFolderInsight> {
-  const { azure } = getConfig();
-  const client = getClient();
-  const documentNameById = new Map(
-    context.documents.map((document) => [document.record.id, document.record.name]),
+  const webContexts = await generateWebContexts(
+    document,
+    folderName,
+    takeawaysWithoutWeb,
   );
-  const insightContext = documentInsights.map((insight) => ({
-    documentId: insight.documentId,
-    documentName: insight.documentName,
-    overview: insight.overview,
-    sections: insight.sections,
+  const takeaways = takeawaysWithoutWeb.map((takeaway) => ({
+    ...takeaway,
+    webContext: webContexts.get(takeaway.id) ?? null,
   }));
 
-  const response = await client.chat.completions.create({
-    model: azure.chatDeployment,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content:
-          "You aggregate document-level insights into folder-level insights for a personal knowledge base. " +
-          "Follow the folder instruction and prioritize the most useful cross-document takeaways. " +
-          "Respond with strict JSON: " +
-          '{"overview":"one sentence","sections":[{"title":"section name","items":[{"text":"concise item","documentId":"source document id when relevant"}]}]}.',
-      },
-      {
-        role: "user",
-        content:
-          `Folder name: ${context.folder.name}\n` +
-          `Folder instruction:\n${instruction}\n\n` +
-          `Document insights:\n${JSON.stringify(insightContext, null, 2)}`,
-      },
-    ],
-  });
-
-  const raw = response.choices[0]?.message?.content ?? "{}";
-  const parsed = parseJsonObject(raw);
-  const overview = normalizeText(parsed.overview);
-  const sections = normalizeFolderSections(parsed.sections, documentNameById);
-
-  if (!overview && sections.length === 0) {
-    throw new Error("The model did not return folder insights.");
+  if (!takeaways.every((takeaway) => takeaway.webContext?.summary)) {
+    throw new Error("The model did not return web-backed expansion for every takeaway.");
   }
 
-  return { overview, sections };
+  return { overview, takeaways };
+}
+
+async function generateWebContexts(
+  document: IndexedFolderDocument,
+  folderName: string,
+  takeaways: Array<Omit<DocumentTakeaway, "webContext">>,
+): Promise<Map<string, InsightWebContext>> {
+  const { azure } = getConfig();
+  const client = getClient();
+
+  const response = await client.responses.create({
+    model: azure.chatDeployment,
+    store: false,
+    include: ["web_search_call.action.sources"],
+    tools: [{ type: "web_search_preview", search_context_size: "high" }],
+    tool_choice: "required",
+    instructions:
+      "Use web search to expand document-grounded learning takeaways with current, externally sourced context. " +
+      "For each takeaway, write a richer web-backed expansion that can be read immediately after the document-grounded detail. " +
+      "Cover relevant background, current external context, practical implications, examples, and caveats when useful. " +
+      "Keep it anchored to the takeaway and avoid generic web research. " +
+      "Write 2-4 compact paragraphs in the summary field, roughly 120-220 words per takeaway. " +
+      "Use inline Markdown links where external claims appear. " +
+      "Prefer authoritative or primary sources when available. " +
+      "Return only JSON that matches the schema.",
+    text: {
+      format: {
+        type: "json_schema",
+        name: "document_takeaway_web_expansion",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["takeaways"],
+          properties: {
+            takeaways: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["takeawayId", "summary", "citations"],
+                properties: {
+                  takeawayId: { type: "string" },
+                  summary: { type: "string" },
+                  citations: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["title", "url"],
+                      properties: {
+                        title: { type: "string" },
+                        url: { type: "string" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    input:
+      `Learning brief goal:\n${LEARNING_BRIEF_INSTRUCTION}\n\n` +
+      `Folder name: ${folderName}\n` +
+      `Document name: ${document.record.name}\n` +
+      `Existing document summary: ${document.index.summary}\n` +
+      `Tags: ${document.index.tags.join(", ")}\n\n` +
+      `Document-grounded takeaways:\n${JSON.stringify(
+        takeaways.map((takeaway) => ({
+          id: takeaway.id,
+          title: takeaway.title,
+          summary: takeaway.summary,
+          detail: takeaway.detail,
+        })),
+        null,
+        2,
+      )}`,
+  });
+
+  if (response.status === "incomplete") {
+    const reason = response.incomplete_details?.reason ?? "unknown reason";
+    throw new Error(`Web expansion generation did not complete: ${reason}.`);
+  }
+
+  if (response.status === "failed") {
+    const message = response.error?.message ?? "unknown reason";
+    throw new Error(`Web expansion generation failed: ${message}.`);
+  }
+
+  const parsed = parseJsonObject(response.output_text.trim() || "{}");
+
+  return normalizeWebContexts(
+    parsed.takeaways,
+    takeaways,
+    collectResponseWebCitations(response),
+  );
 }
 
 export async function getInsightsView(): Promise<InsightsResponse> {
@@ -651,63 +720,46 @@ export async function getInsightsView(): Promise<InsightsResponse> {
     loadIndexedFolderContexts(),
   ]);
   const folders: FolderInsightView[] = contexts.map((context) => {
-    const setting = getFolderSetting(store, context.folder.id);
-    const currentInstructionHash = setting
-      ? instructionHash(setting.instruction)
-      : null;
-    const documentHashById = new Map(
-      context.documents.map((document) => [
-        document.record.id,
-        document.documentHash,
-      ]),
-    );
     const documents = context.documents.map((document) => {
       const insight = getDocumentInsight(store, document.record.id);
-      const status = getDocumentStatus(document, setting, insight);
+      const status = getDocumentStatus(document, insight);
+      const currentInsight = status === "fresh" ? insight : null;
 
       return {
         documentId: document.record.id,
         documentName: document.record.name,
         status,
-        generatedAt: insight?.generatedAt ?? null,
-        overview: insight?.overview ?? "",
-        sections: insight?.sections ?? [],
+        generatedAt: currentInsight?.generatedAt ?? null,
+        overview: currentInsight?.overview ?? "",
+        takeaways: currentInsight?.takeaways ?? [],
       };
     });
-    const freshDocumentInsights = context.documents
-      .map((document) => getDocumentInsight(store, document.record.id))
-      .filter(
-        (insight): insight is DocumentInsightRecord =>
-          insight !== null &&
-          Boolean(currentInstructionHash) &&
-          insight.folderId === context.folder.id &&
-          insight.instructionHash === currentInstructionHash &&
-          insight.documentHash === documentHashById.get(insight.documentId),
-      );
-    const folderInsight = getFolderInsight(store, context.folder.id);
-    const folderStatus = getFolderStatus(
-      context,
-      setting,
-      folderInsight,
-      freshDocumentInsights,
-    );
     const documentStatuses = documents.map((document) => document.status);
     const status: InsightStatus = documentStatuses.includes("pending")
       ? "pending"
-      : documentStatuses.includes("stale") || folderStatus === "stale"
+      : documentStatuses.includes("stale")
         ? "stale"
-        : folderStatus;
+        : "fresh";
+    const takeawayCount = documents.reduce(
+      (total, document) => total + document.takeaways.length,
+      0,
+    );
+    const generatedAt =
+      documents
+        .map((document) => document.generatedAt)
+        .filter((value): value is string => Boolean(value))
+        .sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null;
 
     return {
       folder: context.folder,
       documentCount: context.documents.length,
-      instruction: setting?.instruction ?? "",
-      instructionSource: setting?.instructionSource ?? null,
-      suggestionStatus: setting ? "ready" : "pending",
+      takeawayCount,
       status,
-      generatedAt: folderInsight?.generatedAt ?? null,
-      overview: folderInsight?.overview ?? "",
-      sections: folderInsight?.sections ?? [],
+      generatedAt,
+      overview:
+        takeawayCount > 0
+          ? `${takeawayCount.toLocaleString()} takeaways generated from ${context.documents.length.toLocaleString()} document${context.documents.length === 1 ? "" : "s"}.`
+          : "",
       documents,
     };
   });
@@ -718,134 +770,75 @@ export async function getInsightsView(): Promise<InsightsResponse> {
   };
 }
 
-export async function updateFolderInsightInstruction({
-  folderId,
-  instruction,
-}: {
-  folderId: string;
-  instruction: string;
-}): Promise<InsightsResponse> {
-  const trimmedInstruction = instruction.trim();
-
-  if (!trimmedInstruction) {
-    throw new Error("Instruction is required.");
-  }
-
-  const [store, folders] = await Promise.all([readStore(), listFolders()]);
-  const folder = folders.find((item) => item.id === folderId);
-
-  if (!folder) {
-    throw new Error("Folder not found.");
-  }
-
-  const existing = getFolderSetting(store, folderId);
-  const now = new Date().toISOString();
-
-  upsertFolderSetting(store, {
-    folderId,
-    instruction: trimmedInstruction,
-    instructionSource: "custom",
-    suggestedInstruction: existing?.suggestedInstruction ?? "",
-    suggestionContextHash: existing?.suggestionContextHash ?? "",
-    suggestionGeneratedAt: existing?.suggestionGeneratedAt ?? now,
-    updatedAt: now,
-  });
-
-  await writeStore(store);
-
-  return getInsightsView();
-}
-
-export async function runBackgroundInsights(): Promise<InsightsRunResponse> {
-  return runInsightsPass({});
-}
-
 export async function forceGenerateInsights({
   folderId,
+  jobId,
 }: {
   folderId?: string;
+  jobId?: string;
 } = {}): Promise<InsightsRunResponse> {
-  return runInsightsPass({ force: true, folderId });
+  return runInsightsPass({ folderId, jobId });
 }
 
 async function runInsightsPass({
-  force = false,
   folderId,
+  jobId,
 }: {
-  force?: boolean;
   folderId?: string;
+  jobId?: string;
 }): Promise<InsightsRunResponse> {
   const store = await readStore();
   const contexts = (await loadIndexedFolderContexts()).filter(
     (context) => !folderId || context.folder.id === folderId,
   );
-  let callsRemaining = force
-    ? contexts.reduce((total, context) => total + context.documents.length + 2, 0)
-    : MAX_BACKGROUND_MODEL_CALLS;
-  let suggestionsGenerated = 0;
-  let documentInsightsGenerated = 0;
-  let folderInsightsGenerated = 0;
+  const generationTargets: InsightGenerationTarget[] = [];
 
   for (const context of contexts) {
-    if (callsRemaining <= 0) {
-      break;
-    }
+    for (const document of context.documents) {
+      const insight = getDocumentInsight(store, document.record.id);
 
-    const setting = getFolderSetting(store, context.folder.id);
-
-    if (
-      shouldSuggestInstruction(setting, context) ||
-      (force && setting?.instructionSource !== "custom")
-    ) {
-      const instruction = await generateSuggestedInstruction(context);
-      const now = new Date().toISOString();
-
-      upsertFolderSetting(store, {
-        folderId: context.folder.id,
-        instruction,
-        instructionSource: "suggested",
-        suggestedInstruction: instruction,
-        suggestionContextHash: context.suggestionContextHash,
-        suggestionGeneratedAt: now,
-        updatedAt: setting?.updatedAt ?? now,
-      });
-      await writeStore(store);
-      callsRemaining -= 1;
-      suggestionsGenerated += 1;
+      if (getDocumentStatus(document, insight) !== "fresh") {
+        generationTargets.push({ context, document });
+      }
     }
   }
 
-  for (const context of contexts) {
-    if (callsRemaining <= 0) {
-      break;
-    }
+  const totalDocuments = generationTargets.length;
+  let documentInsightsGenerated = 0;
+  let processedDocuments = 0;
 
-    const setting = getFolderSetting(store, context.folder.id);
+  updateInsightGenerationProgress(jobId, {
+    status: "active",
+    percent: progressPercent(0, totalDocuments),
+    processedDocuments: 0,
+    totalDocuments,
+    currentDocumentName: null,
+    label:
+      totalDocuments === 0
+        ? "No documents need generation"
+        : "Preparing learning brief",
+    detail:
+      totalDocuments === 0 ? "Insight cache is current" : progressDetail(0, totalDocuments),
+  });
 
-    if (!setting) {
-      continue;
-    }
+  try {
+    const currentInstructionHash = instructionHash(LEARNING_BRIEF_INSTRUCTION);
 
-    const currentInstructionHash = instructionHash(setting.instruction);
+    for (const { context, document } of generationTargets) {
+      updateInsightGenerationProgress(jobId, {
+        status: "active",
+        percent: progressPercent(processedDocuments, totalDocuments),
+        processedDocuments,
+        totalDocuments,
+        currentDocumentName: document.record.name,
+        label: "Generating learning brief",
+        detail: progressDetail(processedDocuments, totalDocuments),
+      });
 
-    for (const document of context.documents) {
-      if (callsRemaining <= 0) {
-        break;
-      }
-
-      const insight = getDocumentInsight(store, document.record.id);
-
-      if (
-        !force &&
-        insight &&
-        insight.folderId === context.folder.id &&
-        insight.instructionHash === currentInstructionHash &&
-        insight.documentHash === document.documentHash
-      ) {
-        continue;
-      }
-
-      const generated = await generateDocumentInsight(document, setting.instruction);
+      const generated = await generateDocumentInsight(
+        document,
+        context.folder.name,
+      );
 
       upsertDocumentInsight(store, {
         documentId: document.record.id,
@@ -853,83 +846,61 @@ async function runInsightsPass({
         documentName: document.record.name,
         instructionHash: currentInstructionHash,
         documentHash: document.documentHash,
+        schemaVersion: INSIGHT_SCHEMA_VERSION,
         generatedAt: new Date().toISOString(),
         overview: generated.overview,
-        sections: generated.sections,
+        takeaways: generated.takeaways,
       });
       await writeStore(store);
-      callsRemaining -= 1;
       documentInsightsGenerated += 1;
+      processedDocuments += 1;
+
+      updateInsightGenerationProgress(jobId, {
+        status: "active",
+        percent: progressPercent(processedDocuments, totalDocuments),
+        processedDocuments,
+        totalDocuments,
+        currentDocumentName: document.record.name,
+        label: "Saved learning brief",
+        detail: progressDetail(processedDocuments, totalDocuments),
+      });
     }
-  }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to generate insights.";
 
-  for (const context of contexts) {
-    if (callsRemaining <= 0) {
-      break;
-    }
-
-    const setting = getFolderSetting(store, context.folder.id);
-
-    if (!setting) {
-      continue;
-    }
-
-    const currentInstructionHash = instructionHash(setting.instruction);
-    const documentHashById = new Map(
-      context.documents.map((document) => [
-        document.record.id,
-        document.documentHash,
-      ]),
-    );
-    const documentInsights = context.documents
-      .map((document) => getDocumentInsight(store, document.record.id))
-      .filter(
-        (insight): insight is DocumentInsightRecord =>
-          insight !== null &&
-          insight.folderId === context.folder.id &&
-          insight.instructionHash === currentInstructionHash &&
-          insight.documentHash === documentHashById.get(insight.documentId),
-      );
-    const folderInsight = getFolderInsight(store, context.folder.id);
-
-    if (
-      documentInsights.length !== context.documents.length ||
-      (!force &&
-        getFolderStatus(context, setting, folderInsight, documentInsights) === "fresh")
-    ) {
-      continue;
-    }
-
-    const generated = await generateFolderInsight(
-      context,
-      documentInsights,
-      setting.instruction,
-    );
-
-    upsertFolderInsight(store, {
-      folderId: context.folder.id,
-      instructionHash: currentInstructionHash,
-      generatedAt: new Date().toISOString(),
-      overview: generated.overview,
-      sections: generated.sections,
+    updateInsightGenerationProgress(jobId, {
+      status: "error",
+      percent: progressPercent(processedDocuments, totalDocuments),
+      processedDocuments,
+      totalDocuments,
+      label: "Generation failed",
+      detail: message,
     });
-    await writeStore(store);
-    callsRemaining -= 1;
-    folderInsightsGenerated += 1;
+
+    throw error;
   }
 
   const pendingJobs = countPendingJobs(contexts, store);
-  const changed =
-    suggestionsGenerated > 0 ||
-    documentInsightsGenerated > 0 ||
-    folderInsightsGenerated > 0;
+  const changed = documentInsightsGenerated > 0;
+
+  updateInsightGenerationProgress(jobId, {
+    status: "complete",
+    percent: 100,
+    processedDocuments,
+    totalDocuments,
+    currentDocumentName: null,
+    label: "Generation complete",
+    detail:
+      totalDocuments === 0
+        ? "Insight cache is current"
+        : progressDetail(processedDocuments, totalDocuments),
+  });
 
   return {
     started: true,
     changed,
-    suggestionsGenerated,
     documentInsightsGenerated,
-    folderInsightsGenerated,
     pendingJobs,
   };
 }

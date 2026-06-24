@@ -2,32 +2,68 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
+  InsightGenerationProgress,
+  InsightsProgressResponse,
   InsightsResponse,
   InsightsRunResponse,
   ViewKey,
 } from "@/app/types";
-import { parseJson } from "@/lib/utils";
-
-const IDLE_DELAY_MS = 60000;
-const BACKGROUND_POLL_MS = 10000;
+import { createId, parseJson } from "@/lib/utils";
 
 type UseInsightsParams = {
   activeView: ViewKey;
-  indexedDocumentsLength: number;
-  isBusy: boolean;
 };
 
 export function useInsights({
   activeView,
-  indexedDocumentsLength,
-  isBusy,
 }: UseInsightsParams) {
-  const lastActivityRef = useRef(0);
-  const isRunningRef = useRef(false);
+  const progressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [insights, setInsights] = useState<InsightsResponse | null>(null);
+  const [insightProgress, setInsightProgress] =
+    useState<InsightGenerationProgress | null>(null);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const [isRunningInsights, setIsRunningInsights] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
+
+  const stopInsightProgressPolling = useCallback(() => {
+    if (progressPollRef.current) {
+      clearInterval(progressPollRef.current);
+      progressPollRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => stopInsightProgressPolling, [stopInsightProgressPolling]);
+
+  const pollInsightProgress = useCallback(async (jobId: string) => {
+    try {
+      const data = await parseJson<InsightsProgressResponse>(
+        await fetch(
+          `/api/insights/run-background?jobId=${encodeURIComponent(jobId)}`,
+          { cache: "no-store" },
+        ),
+      );
+
+      if (!data.progress) {
+        return;
+      }
+
+      setInsightProgress(data.progress);
+
+      if (data.progress.status !== "active") {
+        stopInsightProgressPolling();
+      }
+    } catch {
+      // The generation request reports the user-facing error; progress polling is best-effort.
+    }
+  }, [stopInsightProgressPolling]);
+
+  const startInsightProgressPolling = useCallback((jobId: string) => {
+    stopInsightProgressPolling();
+    progressPollRef.current = setInterval(() => {
+      void pollInsightProgress(jobId);
+    }, 900);
+    void pollInsightProgress(jobId);
+  }, [pollInsightProgress, stopInsightProgressPolling]);
 
   const refreshInsights = useCallback(async () => {
     setIsLoadingInsights(true);
@@ -47,47 +83,55 @@ export function useInsights({
     }
   }, []);
 
-  const updateFolderInstruction = useCallback(
-    async (folderId: string, instruction: string) => {
-      const data = await parseJson<InsightsResponse>(
-        await fetch("/api/insights", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ folderId, instruction }),
-        }),
-      );
-
-      setInsights(data);
-      setInsightsError(null);
-    },
-    [],
-  );
-
   const generateInsights = useCallback(async (folderId?: string) => {
+    const jobId = createId("insight");
+
     setIsRunningInsights(true);
+    setInsightProgress({
+      jobId,
+      status: "active",
+      percent: 0,
+      processedDocuments: 0,
+      totalDocuments: 0,
+      currentDocumentName: null,
+      label: "Preparing generation",
+      detail: null,
+      updatedAt: Date.now(),
+    });
+    startInsightProgressPolling(jobId);
 
     try {
       const result = await parseJson<InsightsRunResponse>(
         await fetch("/api/insights/run-background", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ force: true, folderId }),
+          body: JSON.stringify({ folderId, jobId }),
         }),
       );
+
+      await pollInsightProgress(jobId);
 
       if (result.started || result.changed) {
         await refreshInsights();
       }
 
       setInsightsError(null);
+      setInsightProgress(null);
     } catch (error) {
+      await pollInsightProgress(jobId);
       setInsightsError(
         error instanceof Error ? error.message : "Failed to generate insights.",
       );
     } finally {
+      stopInsightProgressPolling();
       setIsRunningInsights(false);
     }
-  }, [refreshInsights]);
+  }, [
+    pollInsightProgress,
+    refreshInsights,
+    startInsightProgressPolling,
+    stopInsightProgressPolling,
+  ]);
 
   useEffect(() => {
     if (activeView === "insights") {
@@ -95,78 +139,13 @@ export function useInsights({
     }
   }, [activeView, refreshInsights]);
 
-  useEffect(() => {
-    lastActivityRef.current = Date.now();
-
-    const markActivity = () => {
-      lastActivityRef.current = Date.now();
-    };
-    const events = ["pointerdown", "keydown", "wheel", "touchstart"];
-
-    for (const eventName of events) {
-      window.addEventListener(eventName, markActivity);
-    }
-
-    document.addEventListener("visibilitychange", markActivity);
-
-    return () => {
-      for (const eventName of events) {
-        window.removeEventListener(eventName, markActivity);
-      }
-
-      document.removeEventListener("visibilitychange", markActivity);
-    };
-  }, []);
-
-  useEffect(() => {
-    const runIfIdle = async () => {
-      if (
-        isBusy ||
-        isRunningRef.current ||
-        indexedDocumentsLength === 0 ||
-        document.visibilityState !== "visible" ||
-        Date.now() - lastActivityRef.current < IDLE_DELAY_MS
-      ) {
-        return;
-      }
-
-      isRunningRef.current = true;
-      setIsRunningInsights(true);
-
-      try {
-        const result = await parseJson<InsightsRunResponse>(
-          await fetch("/api/insights/run-background", { method: "POST" }),
-        );
-
-        if (result.changed && activeView === "insights") {
-          await refreshInsights();
-        }
-
-        setInsightsError(null);
-      } catch (error) {
-        setInsightsError(
-          error instanceof Error ? error.message : "Failed to generate insights.",
-        );
-      } finally {
-        isRunningRef.current = false;
-        setIsRunningInsights(false);
-      }
-    };
-
-    const interval = window.setInterval(() => {
-      void runIfIdle();
-    }, BACKGROUND_POLL_MS);
-
-    return () => window.clearInterval(interval);
-  }, [activeView, indexedDocumentsLength, isBusy, refreshInsights]);
-
   return {
     insights,
+    insightProgress,
     isLoadingInsights,
     isRunningInsights,
     insightsError,
     refreshInsights,
     generateInsights,
-    updateFolderInstruction,
   };
 }

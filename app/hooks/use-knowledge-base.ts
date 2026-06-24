@@ -161,16 +161,14 @@ export function useKnowledgeBase() {
 
   const {
     insights,
+    insightProgress,
     isLoadingInsights,
     isRunningInsights,
     insightsError,
     refreshInsights,
     generateInsights,
-    updateFolderInstruction,
   } = useInsights({
     activeView,
-    indexedDocumentsLength: indexedDocuments.length,
-    isBusy: isUploading || isIngesting || stats.ingesting > 0 || isAnswering,
   });
 
   const {
@@ -402,6 +400,7 @@ export function useKnowledgeBase() {
     messages,
     isAnswering,
     insights,
+    insightProgress,
     isLoadingInsights,
     isRunningInsights,
     insightsError,
@@ -423,7 +422,6 @@ export function useKnowledgeBase() {
     messagesEndRef,
     refreshInsights,
     generateInsights,
-    updateFolderInstruction,
     handleInputChange,
     handleDrop,
     startIngestion,

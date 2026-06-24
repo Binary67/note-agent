@@ -1,14 +1,25 @@
 import {
+  beginInsightGenerationProgress,
   forceGenerateInsights,
-  runBackgroundInsights,
+  getInsightGenerationProgress,
 } from "@/lib/insights";
 
 let activeRun: Promise<unknown> | null = null;
 
 type RunInsightsRequest = {
-  force?: unknown;
   folderId?: unknown;
+  jobId?: unknown;
 };
+
+export async function GET(request: Request) {
+  const jobId = new URL(request.url).searchParams.get("jobId");
+
+  if (!jobId) {
+    return Response.json({ progress: null }, { status: 400 });
+  }
+
+  return Response.json({ progress: getInsightGenerationProgress(jobId) });
+}
 
 export async function POST(request: Request) {
   let body: RunInsightsRequest = {};
@@ -19,16 +30,14 @@ export async function POST(request: Request) {
     body = {};
   }
 
-  const force = body.force === true;
   const folderId = typeof body.folderId === "string" ? body.folderId : undefined;
+  const jobId = typeof body.jobId === "string" ? body.jobId : undefined;
 
-  if (activeRun && !force) {
+  if (activeRun) {
     return Response.json({
       started: false,
       changed: false,
-      suggestionsGenerated: 0,
       documentInsightsGenerated: 0,
-      folderInsightsGenerated: 0,
       pendingJobs: 0,
     });
   }
@@ -36,13 +45,11 @@ export async function POST(request: Request) {
   let run: Promise<unknown> | null = null;
 
   try {
-    if (activeRun) {
-      await activeRun.catch(() => undefined);
+    if (jobId) {
+      beginInsightGenerationProgress(jobId);
     }
 
-    run = force
-      ? forceGenerateInsights({ folderId })
-      : runBackgroundInsights();
+    run = forceGenerateInsights({ folderId, jobId });
     activeRun = run;
     const result = await run;
 

@@ -360,9 +360,7 @@ function validateInsights(value: unknown): unknown {
   }
 
   return {
-    folderSettings: validateRecordArray(value.folderSettings, "insights.folderSettings"),
     documentInsights: validateRecordArray(value.documentInsights, "insights.documentInsights"),
-    folderInsights: validateRecordArray(value.folderInsights, "insights.folderInsights"),
   };
 }
 
